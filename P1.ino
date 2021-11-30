@@ -1,6 +1,8 @@
+//Include the needed libraries
 #include <Wire.h>
 #include <Zumo32U4.h>
 
+//This is the code from group B377 for our P1 project.
 
 Zumo32U4Motors motors;
 Zumo32U4Encoders encoders;
