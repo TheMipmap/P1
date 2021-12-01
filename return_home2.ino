@@ -50,29 +50,34 @@ uint16_t gyroLastUpdate = 0;
 
 using namespace BLA;
 
-BLA::Matrix<3, 3> rotation;
-BLA::Matrix<3> v;
-BLA::Matrix<3> sumV;
+BLA::Matrix<2, 2> rotation;
+BLA::Matrix<2, 2> rotation_inv;
+BLA::Matrix<2> v;
+BLA::Matrix<2> sumV;
 
 void setup() {
   sumV.Fill(0);
   Serial.begin(9600);  // Start the serial-communication between the robot and the computer.
-  lineSensors.initFiveSensors(); // Initialize the 5 lineSensors.
-  calibrateThreshold();
-  buttonA.waitForPress();
-  buttonA.waitForRelease();
-  readSensors(sensorsState);
+  //lineSensors.initFiveSensors(); // Initialize the 5 lineSensors.
+  //calibrateThreshold();
+  //buttonA.waitForPress();
+  //buttonA.waitForRelease();
+  //readSensors(sensorsState);
   turnSensorSetup();
   delay(500);
   turnSensorReset();  
   buttonA.waitForPress(); //Starts the program after a click on button A and a small delay
   delay(1000);
-
 }
 
 void loop() {
-  moveForwardLine(100,100);
-  //moveForwardDistance(100,100,20);
+  moveForwardDistance(150,150,60);
+  turn(100,90,'l');
+  delay(50);
+  moveForwardDistance(150,150,20);
+  turn(100,90,'r');
+  delay(50);
+  moveForwardDistance(150,150,60);
   returnHome();
   buttonA.waitForPress();
 }
@@ -80,8 +85,8 @@ void loop() {
 void trackUpdate() {
   double countsL = encoders.getCountsAndResetLeft(); // Henter den resettede encoder-data (Skulle gerne være 0)
   double countsR = encoders.getCountsAndResetRight();
-  double movementUpdate = ((countsL + countsR) / 900) * PI * 3.9;
-  track(movementUpdate);
+  double movement = ((countsL + countsR) / 900) * PI * 3.9;
+  track(movement);
 
 }
 void moveForwardDistance(int spL, int spR, int centimeters) {
@@ -141,16 +146,14 @@ void track(double distance) {
   //read the orientatation and encoders
   radTheta = theta * PI / 180;
   v(0) = distance;
-  v(2) = radTheta;
   //construct the rotation matrix
-  BLA::Matrix<3, 3> rotation = {cos(radTheta), sin(radTheta), 0, -sin(radTheta), cos(radTheta), 0, 0, 0, 1};
+  BLA::Matrix<2, 2> rotation = {cos(radTheta), sin(radTheta), -sin(radTheta), cos(radTheta)};
 
   //calculate the inverse matrix, in order to go from the local basis to the global
-  BLA::Matrix<3, 3> rotation_inv = Invert(rotation);
+  BLA::Matrix<2, 2> rotation_inv = {cos(radTheta), -sin(radTheta), sin(radTheta), cos(radTheta)};
   //do the calculations
   // add the result onto the zum vector
   sumV += rotation_inv * v;
-  sumV(2) = radTheta;
 
   //Serial << "rotation: " << rotation << '\n';
   //Serial.println("x-coordinate " + String(v(0)));
@@ -160,26 +163,23 @@ void track(double distance) {
 }
 
 void returnHome() {
-  //calculate the angle from the sumvector
+  //calculate the angle from the sumvector by tan(slope y / slope x)
   double angleSumV = 57.2957795 * atan2(sumV(1), sumV(0));
+  lcd.clear();  
+  lcd.print(sumV(0));
+  lcd.gotoXY(0,1);
+  lcd.print(sumV(1));
+  buttonA.waitForPress();
+  delay(1000);
   lcd.clear();
-
-  //calculate needed to turn for left and right
-  if (180 - theta + angleSumV <= 360 - theta - angleSumV) {
-    lcd.print(180 - theta + angleSumV);
-    turn(100, 180 - theta + angleSumV, 'l');
-
-  }
-  else {
-    lcd.print(100, 360 - theta - angleSumV);
-    turn(100, 360 - theta - angleSumV, 'r');
-  }
-
-  radTheta = theta * PI / 180;
-  BLA::Matrix<3, 3> rotation = {cos(radTheta), sin(radTheta), 0, -sin(radTheta), cos(radTheta), 0, 0, 0, 1};
-  BLA::Matrix<3> homeDistance = rotation * sumV;
-  moveForwardDistance(100, 100, homeDistance(0));
-
+  lcd.print(angleSumV);
+  turn(100,180-theta+angleSumV,'l');
+  BLA::Matrix<2, 2> rotation = {cos(radTheta), sin(radTheta), -sin(radTheta), cos(radTheta)};
+  BLA::Matrix<2> homeDistance = rotation * sumV;
+  lcd.clear();
+  lcd.print(homeDistance(0));
+  
+  moveForwardDistance(100,100,homeDistance(0));
 
 }
 
