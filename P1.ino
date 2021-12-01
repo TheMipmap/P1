@@ -1,6 +1,7 @@
 //Include the needed libraries
 #include <Wire.h>
 #include <Zumo32U4.h>
+#include <BasicLinearAlgebra.h>
 
 //This is the code from group B377 for our P1 project.
 
@@ -66,6 +67,31 @@ int16_t gyroOffset;
 // between readings of the gyro.
 uint16_t gyroLastUpdate = 0;
 
+//Global variables that stores the encoder counts
+double countsL;
+double countsR;
+
+//Orientation of the zumo
+int theta = 0;
+double radTheta;
+
+//Short the name of BasicLinearAlgebra
+using namespace BLA;
+
+
+//Matrixes and vectors for positioning
+//Matrix for local change to global
+BLA::Matrix<2, 2> rotation;
+
+//Matrix for global change to local
+BLA::Matrix<2, 2> rotation_inv;
+
+//Vector for zumo's movements
+BLA::Matrix<2> v;
+
+//Vector for zumo's global position
+BLA::Matrix<2> sumV;
+
 
 
 void setup() {
@@ -74,6 +100,9 @@ void setup() {
   //Start Serial communication between the computer and the zumo
   Serial.begin(9600);
 
+  //Resets the vector
+  sumV.Fill(0);
+  
   // Initialize the 3 lineSensors.
   lineSensors.initThreeSensors();
 
@@ -181,13 +210,13 @@ void followLine(int sensorNumber) {
        
      //If the line sensor value is above threshold turn right
         if (lineSensorValues[sensorNumber] > threshold[sensorNumber] * 1.1) {
-          motors.setSpeeds(fastMotor, slowMotor);
+          moveForward(fastMotor,slowMotor);
         } // else if line sensor value is lower, turn left
         else if (lineSensorValues[sensorNumber] < threshold[sensorNumber] * 0.9) {
-          motors.setSpeeds(slowMotor, fastMotor);
+          moveForward(slowMotor,fastMotor);
         } // else move straight ahead
         else {
-          motors.setSpeeds(fastMotor, fastMotor);
+          moveForward(fastMotor,fastMotor);
         }
         readSensors(sensorsState);
   }
@@ -248,25 +277,29 @@ void stopMotors() {
   motors.setSpeeds(0,0);
 }
 
-void moveStraightForwardNoStop(int fart) {
+//A function that moves straight according to the gyro.
+void moveStraightForwardUntilLine(int fart) {
 
   //Set a variable for the angle
   int angle = (((uint32_t)turnAngle >> 16) * 360) >> 16;
-  
-  while(true) {
-    
+
+  //Move straight until the center sensor is white.
+  while(!sensorsState.C) {
+
+       //If gyro sensors angle is 0 degrees, run the same speed on both motors
        if (angle == 0) {
-       //If gyro sensor is 0 degrees, run the same speed on both motors
-        motors.setSpeeds(fart, fart);
+        moveForward(fart,fart);
        }
        //If the gyro is < 0 degrees turn slightly right
        else if (angle < 180) {
-         motors.setSpeeds(fart + 50,fart);
+         moveForward(fart + 50,fart);
        }  
       //else if gyro is > 0 degrees turn slightly left
        else if (angle > 180) {
-       motors.setSpeeds(fart, fart +50);
+       moveForward(fart,fart + 50);
      }
+     
+     //Update sensorsState to see if the center sensor is white.
      readSensors(sensorsState);
      turnSensorUpdate();
      angle = (((uint32_t)turnAngle >> 16) * 360) >> 16;
@@ -363,4 +396,121 @@ void turnSensorUpdate()
   // (0.07 dps/digit) * (1/1000000 s/us) * (2^29/45 unit/degree)
   // = 14680064/17578125 unit/(digit*us)
   turnAngle += (int64_t)d * 14680064 / 17578125;
+}
+
+
+
+//
+//
+//Function for zumo positioning
+//
+//
+
+//A function that updates that initializes the calculation of the movement since last time track() was called
+void trackUpdate() {
+  double countsL = encoders.getCountsAndResetLeft(); // Henter den resettede encoder-data (Skulle gerne være 0)
+  double countsR = encoders.getCountsAndResetRight();
+  double movement = ((countsL + countsR) / 900) * PI * 3.9;
+  track(movement);
+}
+
+//A function that moves forward a given distance while updating position
+void moveForwardDistance(int spL, int spR, int centimeters) {
+  double distance = 0;
+  while (distance < centimeters) {
+    motors.setSpeeds(spL, spR);
+    double countsL = encoders.getCountsAndResetLeft(); // Henter den resettede encoder-data (Skulle gerne være 0)
+    double countsR = encoders.getCountsAndResetRight();
+    double movementUpdate = ((countsL + countsR) / 900) * PI * 3.9;
+    distance += movementUpdate;
+    track(movementUpdate);
+  }
+  motors.setSpeeds(0, 0);
+  trackUpdate();
+}
+
+//A function that moves forward until line while updating position
+void moveForwardLine(int spL, int spR) {
+  while (!sensorsState.C) {
+    motors.setSpeeds(spL, spR);
+    trackUpdate();
+    readSensors(sensorsState);
+  }
+  motors.setSpeeds(0, 0);
+  trackUpdate();
+}
+
+//A function that moves foward while updating position
+void moveForward(int spL, int spR) {
+  motors.setSpeeds(spL, spR);
+  trackUpdate();
+}
+
+//A function that turns a given angle in a given direction
+void turn(int speed, int grader, char direction) {
+  if (direction == 'l' || direction == 'L') {
+    turnSensorReset();
+    theta += grader;
+    Serial.println(((((uint32_t)turnAngle >> 16) * 360) >> 16));
+    while (((((uint32_t)turnAngle >> 16) * 360) >> 16) != grader) {
+      Serial.println(((((uint32_t)turnAngle >> 16) * 360) >> 16));
+      motors.setSpeeds(-speed, speed);
+      turnSensorUpdate();
+    }
+    motors.setSpeeds(0, 0);
+  } else if (direction == 'r' || direction == 'R') {
+    turnSensorReset();
+    theta -= grader;
+    while (((((uint32_t)turnAngle >> 16) * 360) >> 16) != 360 - grader) {
+      motors.setSpeeds(speed, -speed);
+      turnSensorUpdate();
+    }
+    motors.setSpeeds(0, 0);
+    encoders.getCountsAndResetLeft();
+    encoders.getCountsAndResetRight();
+  }
+}
+
+//A function that tracks movement in the global reference frame
+void track(double distance) {
+  
+  //read the orientatation and encoders
+  radTheta = theta * PI / 180;
+  v(0) = distance;
+  //construct the rotation matrix
+  BLA::Matrix<2, 2> rotation = {cos(radTheta), sin(radTheta), -sin(radTheta), cos(radTheta)};
+
+  //calculate the inverse matrix, in order to go from the local basis to the global
+  BLA::Matrix<2, 2> rotation_inv = {cos(radTheta), -sin(radTheta), sin(radTheta), cos(radTheta)};
+  //do the calculations
+  // add the result onto the zum vector
+  sumV += rotation_inv * v;
+
+  //Serial << "rotation: " << rotation << '\n';
+  //Serial.println("x-coordinate " + String(v(0)));
+  //Serial.println("y-coordinate " + String(v(1)));
+  //Serial.println("theta " + String(v(2)));
+  //Serial << "sum " << sumV << '\n';
+}
+
+//A function that returns to the original position
+void returnHome() {
+  //calculate the angle from the sumvector by tan(slope y / slope x)
+  double angleSumV = 57.2957795 * atan2(sumV(1), sumV(0));
+  lcd.clear();  
+  lcd.print(sumV(0));
+  lcd.gotoXY(0,1);
+  lcd.print(sumV(1));
+  buttonA.waitForPress();
+  delay(1000);
+  lcd.clear();
+  lcd.print(angleSumV);
+  turn(100,180-theta+angleSumV,'l');
+  BLA::Matrix<2, 2> rotation = {cos(radTheta), sin(radTheta), -sin(radTheta), cos(radTheta)};
+  BLA::Matrix<2> homeDistance = rotation * sumV;
+  lcd.clear();
+  lcd.print(homeDistance(0));
+  
+  moveForwardDistance(100,100,homeDistance(0));
+
 }
