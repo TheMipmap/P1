@@ -60,7 +60,7 @@ void setup() {
   resetEncoders();
 
   //Call the followLine function
-  followLine();
+  followLine(2);
 
   //Call the calculateDistance function, that 
   calculateDistance(avgCounts());
@@ -136,24 +136,24 @@ void calibrateThreshold() {
 
 
 // Function that follows a line
-void followLine() {
+void followLine(int sensorNumber) {
   
   //while center sensor is NOT white, follow the line.
   while(!sensorsState.C) {
 
      // A boolean that determines if the lineSensorValue of the outerright sensor is bigger than the threshold for that sensor
-     bool lineValuesBigger = lineSensorValues[2] > threshold[2] ? 1 : 0;
+     bool lineValuesBigger = lineSensorValues[sensorNumber] > threshold[sensorNumber] ? 1 : 0;
 
      //If the lineSensorValue of the outerright sensor is bigger than the threshold for that sensor, we will divide it by the threshold and get a number between
-     double fastMotor = 150 * (lineValuesBigger ? double(lineSensorValues[2] / threshold[2]) : double(threshold[2] / lineSensorValues[2]));
-     double slowMotor = 60 / (lineValuesBigger ? double(lineSensorValues[2] / threshold[2]) : double(threshold[2] / lineSensorValues[2]));
+     double fastMotor = 150 * (lineValuesBigger ? double(lineSensorValues[sensorNumber] / threshold[sensorNumber]) : double(threshold[sensorNumber] / lineSensorValues[sensorNumber]));
+     double slowMotor = 60 / (lineValuesBigger ? double(lineSensorValues[sensorNumber] / threshold[sensorNumber]) : double(threshold[sensorNumber] / lineSensorValues[sensorNumber]));
 
        
      //If the line sensor value is above threshold turn right
-        if (lineSensorValues[2] > threshold[2] * 1.1) {
+        if (lineSensorValues[sensorNumber] > threshold[sensorNumber] * 1.1) {
           motors.setSpeeds(fastMotor, slowMotor);
         } // else if line sensor value is lower, turn left
-        else if (lineSensorValues[2] < threshold[2] * 0.9) {
+        else if (lineSensorValues[sensorNumber] < threshold[sensorNumber] * 0.9) {
           motors.setSpeeds(slowMotor, fastMotor);
         } // else move straight ahead
         else {
