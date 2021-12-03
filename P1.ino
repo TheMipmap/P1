@@ -329,6 +329,9 @@ void stopMotors() {
 //A function that moves straight according to the gyro.
 void moveStraightForwardUntilLine(int fart) {
 
+  //Read the sensors to make sure the center sensor is black
+  readSensors(sensorsState);
+  
   //Reset angle to 0
   turnSensorReset();
   
