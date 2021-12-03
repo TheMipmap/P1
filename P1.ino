@@ -100,7 +100,7 @@ void setup() {
   //Start Serial communication between the computer and the zumo
   Serial.begin(9600);
 
-  //Resets the vector
+  //Resets the sum vector
   sumV.Fill(0);
   
   // Initialize the 3 lineSensors.
