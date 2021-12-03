@@ -67,9 +67,9 @@ int16_t gyroOffset;
 // between readings of the gyro.
 uint16_t gyroLastUpdate = 0;
 
-//Global variables that stores the encoder counts
-double countsL;
-double countsR;
+//Global variable that stores the encoder counts (These are used when measuring a distance
+int totalCountsL = 0;
+int totalCountsR = 0;
 
 //Orientation of the zumo
 int theta = 0;
@@ -116,7 +116,7 @@ void setup() {
   
   //Read the sensors and reset the encoders, to make sure the robot is ready to follow the line and measuere the distance
   readSensors(sensorsState);
-  resetEncoders();
+  resetTotalCounts();
 
   //Call the followLine function
   followLine(2);
@@ -125,9 +125,15 @@ void setup() {
   calculateDistance(avgCounts());
 }
 
+
+
 void loop() {
   //Code that loops over and over again until the robot stops.
-  
+     delay(100);
+     turn(100, 90, 'l');
+     moveStraightDistance(100, 40);
+     returnHome();
+     buttonA.waitForPress();
 }
 
 //
@@ -228,34 +234,31 @@ void followLine(int sensorNumber) {
 // Function that gets the average counts from the two encoders
 double avgCounts() {
 
-  //store the encoder values and find the avg value
-  int countsLeft = encoders.getCountsLeft();
-  int countsRight = encoders.getCountsRight();
-
-  //Calculate the avg encoder counts
-  double avgCounts = (countsLeft + countsRight) / 2;
-  
+  //Calculate the avg encoder counts, using the
+  double avgCounts = (totalCountsL + totalCountsR) / 2;
   return avgCounts;
 }
 
-//A function that resets the encoders
-void resetEncoders() {
-  int countsLeft = encoders.getCountsAndResetLeft();
-  int countsRight = encoders.getCountsAndResetRight();
+//A function that resets the global totalCount variables
+void resetTotalCounts() {
+  totalCountsL = 0;
+  totalCountsR = 0;
 }
 
 
 //A function that calculates the distance travelled since the encoders were last reset and prints it to the LCD.
-void calculateDistance(double counts) {
+double calculateDistance(double counts) {
 
   //Calulate distance
   double distance = (counts / 909.7) * PI * 3.9 * 0.9395705277;
-
-  //Print the distance on the LCD
-  lcd.clear();
+  
+  //Print the distance on the LCD, uncomment to print
+  /*lcd.clear();
   lcd.print("Cm: ");
   lcd.gotoXY(0,1);
-  lcd.print(distance);
+  lcd.print(distance);*/
+
+  return distance;
 }
 
 //A function that reads the line sensors and updates the sensorsState array
@@ -280,6 +283,9 @@ void stopMotors() {
 //A function that moves straight according to the gyro.
 void moveStraightForwardUntilLine(int fart) {
 
+  //Reset angle to 0
+  turnSensorReset();
+  
   //Set a variable for the angle
   int angle = (((uint32_t)turnAngle >> 16) * 360) >> 16;
 
@@ -306,8 +312,53 @@ void moveStraightForwardUntilLine(int fart) {
      lcd.clear();
      lcd.print(angle);
   }
+  stopMotors();
 }
 
+//A function that moves a given distance straight according to the gyroa and then stops
+void moveStraightDistance(int fart, double centimeters) {
+
+  //Reset totalCounts variables and turnSensor
+  resetTotalCounts();
+  turnSensorReset();
+  
+  //Set a variable for the angle
+  int angle = (((uint32_t)turnAngle >> 16) * 360) >> 16;
+  
+  //Variable for the distance travelled
+  double distance = calculateDistance(avgCounts());
+  
+  //Move straight until the center sensor is white.
+  while (distance < centimeters) {
+
+       //print LCD
+       lcd.clear();
+       lcd.print(distance);
+       lcd.gotoXY(0,1);
+       lcd.print(centimeters);
+       
+       
+       //If gyro sensors angle is 0 degrees, run the same speed on both motors
+       if (angle == 0) {
+         moveForward(fart,fart);
+       }
+       //If the gyro is < 0 degrees turn slightly right
+       else if (angle < 180) {
+         moveForward(fart + 50,fart);
+       }  
+       //else if gyro is > 0 degrees turn slightly left
+       else if (angle > 180) {
+         moveForward(fart,fart + 50);
+       }
+     
+     //Update distance to see if distance is reached and check to see if the zumo is still going straight
+     distance = calculateDistance(avgCounts());
+     turnSensorUpdate();
+     angle = (((uint32_t)turnAngle >> 16) * 360) >> 16;
+  }
+  stopMotors();
+  trackUpdate();
+}
 
 
 //
@@ -406,39 +457,28 @@ void turnSensorUpdate()
 //
 //
 
+//Functions that get the counts from an encoder and resets it. While updating the global variable totalCounts
+double getCountsL() {
+  double countsL = encoders.getCountsAndResetLeft();
+  totalCountsL += countsL;
+  return countsL;
+}
+
+double getCountsR() {
+  double countsR = encoders.getCountsAndResetRight();
+  totalCountsR += countsR;
+  return countsR;
+}
+
 //A function that updates that initializes the calculation of the movement since last time track() was called
 void trackUpdate() {
-  double countsL = encoders.getCountsAndResetLeft(); // Henter den resettede encoder-data (Skulle gerne være 0)
-  double countsR = encoders.getCountsAndResetRight();
-  double movement = ((countsL + countsR) / 900) * PI * 3.9;
+  double countsL = getCountsL(); // Henter den resettede encoder-data (Skulle gerne være 0)
+  double countsR = getCountsR();
+  double avg = (countsL + countsR); //Divider med 2 :| <----------------------------------------------------------------------------------------------
+  double movement = calculateDistance(avg);
   track(movement);
 }
 
-//A function that moves forward a given distance while updating position
-void moveForwardDistance(int spL, int spR, int centimeters) {
-  double distance = 0;
-  while (distance < centimeters) {
-    motors.setSpeeds(spL, spR);
-    double countsL = encoders.getCountsAndResetLeft(); // Henter den resettede encoder-data (Skulle gerne være 0)
-    double countsR = encoders.getCountsAndResetRight();
-    double movementUpdate = ((countsL + countsR) / 900) * PI * 3.9;
-    distance += movementUpdate;
-    track(movementUpdate);
-  }
-  motors.setSpeeds(0, 0);
-  trackUpdate();
-}
-
-//A function that moves forward until line while updating position
-void moveForwardLine(int spL, int spR) {
-  while (!sensorsState.C) {
-    motors.setSpeeds(spL, spR);
-    trackUpdate();
-    readSensors(sensorsState);
-  }
-  motors.setSpeeds(0, 0);
-  trackUpdate();
-}
 
 //A function that moves foward while updating position
 void moveForward(int spL, int spR) {
@@ -497,20 +537,15 @@ void track(double distance) {
 void returnHome() {
   //calculate the angle from the sumvector by tan(slope y / slope x)
   double angleSumV = 57.2957795 * atan2(sumV(1), sumV(0));
-  lcd.clear();  
-  lcd.print(sumV(0));
-  lcd.gotoXY(0,1);
-  lcd.print(sumV(1));
-  buttonA.waitForPress();
-  delay(1000);
-  lcd.clear();
-  lcd.print(angleSumV);
+
+  delay(500);
+
   turn(100,180-theta+angleSumV,'l');
   BLA::Matrix<2, 2> rotation = {cos(radTheta), sin(radTheta), -sin(radTheta), cos(radTheta)};
   BLA::Matrix<2> homeDistance = rotation * sumV;
   lcd.clear();
   lcd.print(homeDistance(0));
   
-  moveForwardDistance(100,100,homeDistance(0));
-
+  //Return home 
+  moveStraightDistance(100, homeDistance(0));
 }
