@@ -114,8 +114,7 @@ void setup() {
   delay(50);
   turnSensorReset();
   
-  //Read the sensors and reset the encoders, to make sure the robot is ready to follow the line and measuere the distance
-  readSensors(sensorsState);
+  //Reset the encoders to make sure the robot is ready to follow the line and measuere the distance
   resetTotalCounts();
 
   //Call the followLine function
@@ -202,6 +201,9 @@ void calibrateThreshold() {
 
 // Function that follows a line
 void followLine(int sensorNumber) {
+
+  //Read linesensors to check if middle sensor is white
+  readSensors(sensorsState);
   
   //while center sensor is NOT white, follow the line.
   while(!sensorsState.C) {
