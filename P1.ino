@@ -233,6 +233,50 @@ void followLine(int sensorNumber) {
 }
 
 
+//A function that follow a line until it has travelled a given distance or hit a line with the middle sensor
+void followLineDistance(int fart, double centimeters) {
+
+  //Reset totalCounts variables
+  resetTotalCounts();
+
+  //Variable for the distance travelled
+  double distance = calculateDistance(avgCounts());
+
+  //Read the sensor states
+  readSensors(sensorsState);
+  
+  //Move straight until the center sensor is white or the distance is reached
+  while ((distance < centimeters) || !sensorsState.C) {
+
+     // A boolean that determines if the lineSensorValue of the outerright sensor is bigger than the threshold for that sensor
+     bool lineValuesBigger = lineSensorValues[sensorNumber] > threshold[sensorNumber] ? 1 : 0;
+
+     //If the lineSensorValue of the outerright sensor is bigger than the threshold for that sensor, we will divide it by the threshold and get a number between
+     double fastMotor = 150 * (lineValuesBigger ? double(lineSensorValues[sensorNumber] / threshold[sensorNumber]) : double(threshold[sensorNumber] / lineSensorValues[sensorNumber]));
+     double slowMotor = 60 / (lineValuesBigger ? double(lineSensorValues[sensorNumber] / threshold[sensorNumber]) : double(threshold[sensorNumber] / lineSensorValues[sensorNumber]));
+
+       
+     //If the line sensor value is above threshold turn right
+        if (lineSensorValues[sensorNumber] > threshold[sensorNumber] * 1.1) {
+          moveForward(fastMotor,slowMotor);
+        } // else if line sensor value is lower, turn left
+        else if (lineSensorValues[sensorNumber] < threshold[sensorNumber] * 0.9) {
+          moveForward(slowMotor,fastMotor);
+        } // else move straight ahead
+        else {
+          moveForward(fastMotor,fastMotor);
+        }
+        readSensors(sensorsState);
+       
+
+     //Update distance to see if distance is reached and read sensors to check if a line is reached
+     distance = calculateDistance(avgCounts());
+     readSensors(sensorsState);
+  }
+  stopMotors();
+  trackUpdate();
+}
+
 // Function that gets the average counts from the two encoders
 double avgCounts() {
 
