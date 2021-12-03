@@ -266,8 +266,6 @@ void followLineDistance(int fart, double centimeters) {
         else {
           moveForward(fastMotor,fastMotor);
         }
-        readSensors(sensorsState);
-       
 
      //Update distance to see if distance is reached and read sensors to check if a line is reached
      distance = calculateDistance(avgCounts());
@@ -409,6 +407,43 @@ void moveStraightDistance(int fart, double centimeters) {
   trackUpdate();
 }
 
+
+//Function for aligning with a detected line, and place the robot perpendicular to the line.
+void alignAndCorrect() {
+
+    //Find out which lineSensors that turned white
+    readSensors(sensorsState);
+    int sensorIsWhite;
+    
+      if (sensorsState.L) sensorIsWhite = 0;
+      if (sensorsState.C) sensorIsWhite = 2;
+      if (sensorsState.R) sensorIsWhite = 1;
+
+      
+   switch (sensorIsWhite) {
+    
+      case 0:
+      while(!sensorsState.R) {
+        readSensors(sensorsState);
+        moveForward(-70,100);
+      }
+      stop();
+      break;
+
+      case 1:
+      while(!sensorsState.L) {
+        readSensors(sensorsState);
+        moveForward(100,-70);
+      }
+      stop();
+      break;
+
+      default:
+      lcd.clear();
+      lcd.print("Error");
+      stop();
+   }
+}
 
 //
 //
