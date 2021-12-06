@@ -1,3 +1,5 @@
+
+
 //Include the needed libraries
 #include <Wire.h>
 #include <Zumo32U4.h>
@@ -23,17 +25,17 @@ Zumo32U4IMU imu;
 
 //Struct that know whether or not the individuel line sensors detects white or black
 struct LineSensorsWhite { // True if White, False if Black
-bool L; 
-bool C; 
-bool R;
+  bool L;
+  bool C;
+  bool R;
 };
 
 //Instance of the struct LineSensorsWhite
-LineSensorsWhite sensorsState = {0,0,0};
+LineSensorsWhite sensorsState = {0, 0, 0};
 
 
 //Variable to store the data from the sensors
-int lineSensorValues[NUM_SENSORS]; 
+int lineSensorValues[NUM_SENSORS];
 
 //Boolean that determines whether or not to turn on the emitters
 bool useEmitters = true;
@@ -42,17 +44,16 @@ bool useEmitters = true;
 int threshold[NUM_SENSORS];
 
 /* turnAngle is a 32-bit unsigned integer representing the amount
-the robot has turned since the last time turnSensorReset was
-called.  This is computed solely using the Z axis of the gyro, so
-it could be inaccurate if the robot is rotated about the X or Y
-axes.
-
-Our convention is that a value of 0x20000000 represents a 45
-degree counter-clockwise rotation.  This means that a uint32_t
-can represent any angle between 0 degrees and 360 degrees.  If
-you cast it to a signed 32-bit integer by writing
-(int32_t)turnAngle, that integer can represent any angle between
--180 degrees and 180 degrees. */
+  the robot has turned since the last time turnSensorReset was
+  called.  This is computed solely using the Z axis of the gyro, so
+  it could be inaccurate if the robot is rotated about the X or Y
+  axes.
+  Our convention is that a value of 0x20000000 represents a 45
+  degree counter-clockwise rotation.  This means that a uint32_t
+  can represent any angle between 0 degrees and 360 degrees.  If
+  you cast it to a signed 32-bit integer by writing
+  (int32_t)turnAngle, that integer can represent any angle between
+  -180 degrees and 180 degrees. */
 uint32_t turnAngle = 0;
 
 // turnRate is the current angular rate of the gyro, in units of
@@ -67,9 +68,9 @@ int16_t gyroOffset;
 // between readings of the gyro.
 uint16_t gyroLastUpdate = 0;
 
-//Global variable that stores the encoder counts (These are used when measuring a distance
-int totalCountsL = 0;
-int totalCountsR = 0;
+//Global variables that stores the encoder counts
+double countsL;
+double countsR;
 
 //Orientation of the zumo
 int theta = 0;
@@ -100,9 +101,9 @@ void setup() {
   //Start Serial communication between the computer and the zumo
   Serial.begin(9600);
 
-  //Resets the sum vector
+  //Resets the vector
   sumV.Fill(0);
-  
+
   // Initialize the 3 lineSensors.
   lineSensors.initThreeSensors();
 
@@ -113,26 +114,29 @@ void setup() {
   turnSensorSetup();
   delay(50);
   turnSensorReset();
-  
-  //Reset the encoders to make sure the robot is ready to follow the line and measuere the distance
-  resetTotalCounts();
+
+  //Read the sensors and reset the encoders, to make sure the robot is ready to follow the line and measuere the distance
+  readSensors(sensorsState);
+  resetEncoders();
 
   //Call the followLine function
   followLine(2);
+  delay(1000);
+  //Turn left
+  turn(100, 90, 'L');
+  delay(1000);
+  //Follow outerline again
+  followLine(2);
 
-  //Call the calculateDistance function, that 
+  //Call the calculateDistance function, that
   calculateDistance(avgCounts());
 }
 
-
-
 void loop() {
   //Code that loops over and over again until the robot stops.
-     delay(100);
-     turn(100, 90, 'l');
-     moveStraightDistance(100, 40);
-     returnHome();
-     buttonA.waitForPress();
+
+  drivePattern();
+
 }
 
 //
@@ -143,307 +147,186 @@ void loop() {
 
 // A function that calibrates the threshold between black and white.
 void calibrateThreshold() {
-    //local variabel til sorte og hvide værdier
-    int black[NUM_SENSORS];
-    int white[NUM_SENSORS];
-    int belt[NUM_SENSORS];
-    
-    //print "Placer over 'sort' og tryk på button A"
-    lcd.clear();
-    lcd.print("Place");
-    lcd.gotoXY(0,1);
-    lcd.print("black");
-    
-    // Vent på button A og aflæs sensorer
-      buttonA.waitForPress();
-      buttonA.waitForRelease();
-      readSensors(sensorsState);
-      
-    // Gemme de sorte værdier
-     for (int i = 0; i < NUM_SENSORS; i++) {
-      black[i] = lineSensorValues[i];
-     }
-     
-    //print "placer over hvid og tryk på button A"
-    lcd.clear();
-    lcd.print("Place");
-    lcd.gotoXY(0,1);
-    lcd.print("white");
+  //local variabel til sorte og hvide værdier
+  int black[NUM_SENSORS];
+  int white[NUM_SENSORS];
+  int belt[NUM_SENSORS];
 
-    // vent på button a og aflæs sensorer
-    buttonA.waitForPress();
-    buttonA.waitForRelease();
-    readSensors(sensorsState);
+  //print "Placer over 'sort' og tryk på button A"
+  lcd.clear();
+  lcd.print("Place");
+  lcd.gotoXY(0, 1);
+  lcd.print("black");
 
-    
-    // gem de hvide værdier
-    for (int i = 0; i < NUM_SENSORS; i++) {
-      white[i] = lineSensorValues[i];
-     }
+  // Vent på button A og aflæs sensorer
+  buttonA.waitForPress();
+  buttonA.waitForRelease();
+  readSensors(sensorsState);
 
-    //lcd skal sige "placer ved start"
-    lcd.clear();
-    lcd.print("Place");
-    lcd.gotoXY(0,1);
-    lcd.print("start");
+  // Gemme de sorte værdier
+  for (int i = 0; i < NUM_SENSORS; i++) {
+    black[i] = lineSensorValues[i];
+  }
 
-    //Vent på knap før resten af koden forsætter
-    buttonA.waitForPress();
-    buttonA.waitForRelease();
-    
-    //læg hvid og sort sammen parvis, og divider med 2, brug derefter dette som threshold
-    for (int i = 0; i < NUM_SENSORS; i++) {
-      threshold[i] = (black[i] + white[i])/2;
-    }   
-    Serial.println(String(threshold[0]) + ", " + String(threshold[1]) + ", " + String(threshold[2]));
+  //print "placer over hvid og tryk på button A"
+  lcd.clear();
+  lcd.print("Place");
+  lcd.gotoXY(0, 1);
+  lcd.print("white");
+
+  // vent på button a og aflæs sensorer
+  buttonA.waitForPress();
+  buttonA.waitForRelease();
+  readSensors(sensorsState);
+
+
+  // gem de hvide værdier
+  for (int i = 0; i < NUM_SENSORS; i++) {
+    white[i] = lineSensorValues[i];
+  }
+
+  //lcd skal sige "placer ved start"
+  lcd.clear();
+  lcd.print("Place");
+  lcd.gotoXY(0, 1);
+  lcd.print("start");
+
+  //Vent på knap før resten af koden forsætter
+  buttonA.waitForPress();
+  buttonA.waitForRelease();
+
+  //læg hvid og sort sammen parvis, og divider med 2, brug derefter dette som threshold
+  for (int i = 0; i < NUM_SENSORS; i++) {
+    threshold[i] = (black[i] + white[i]) / 2;
+  }
+  Serial.println(String(threshold[0]) + ", " + String(threshold[1]) + ", " + String(threshold[2]));
 }
 
 
 // Function that follows a line
 void followLine(int sensorNumber) {
-
-  //Read linesensors to check if middle sensor is white
   readSensors(sensorsState);
-  
+  turnSensorReset();
+
   //while center sensor is NOT white, follow the line.
-  while(!sensorsState.C) {
+  while (!sensorsState.C) {
 
-     // A boolean that determines if the lineSensorValue of the outerright sensor is bigger than the threshold for that sensor
-     bool lineValuesBigger = lineSensorValues[sensorNumber] > threshold[sensorNumber] ? 1 : 0;
 
-     //If the lineSensorValue of the outerright sensor is bigger than the threshold for that sensor, we will divide it by the threshold and get a number between
-     double fastMotor = 150 * (lineValuesBigger ? double(lineSensorValues[sensorNumber] / threshold[sensorNumber]) : double(threshold[sensorNumber] / lineSensorValues[sensorNumber]));
-     double slowMotor = 60 / (lineValuesBigger ? double(lineSensorValues[sensorNumber] / threshold[sensorNumber]) : double(threshold[sensorNumber] / lineSensorValues[sensorNumber]));
+    // A boolean that determines if the lineSensorValue of the outerright sensor is bigger than the threshold for that sensor
+    bool lineValuesBigger = lineSensorValues[sensorNumber] > threshold[sensorNumber] ? 1 : 0;
 
-       
-     //If the line sensor value is above threshold turn right
-        if (lineSensorValues[sensorNumber] > threshold[sensorNumber] * 1.1) {
-          moveForward(fastMotor,slowMotor);
-        } // else if line sensor value is lower, turn left
-        else if (lineSensorValues[sensorNumber] < threshold[sensorNumber] * 0.9) {
-          moveForward(slowMotor,fastMotor);
-        } // else move straight ahead
-        else {
-          moveForward(fastMotor,fastMotor);
-        }
-        readSensors(sensorsState);
+    //If the lineSensorValue of the outerright sensor is bigger than the threshold for that sensor, we will divide it by the threshold and get a number between
+    double fastMotor = 150 * (lineValuesBigger ? double(lineSensorValues[sensorNumber] / threshold[sensorNumber]) : double(threshold[sensorNumber] / lineSensorValues[sensorNumber]));
+    double slowMotor = 60 / (lineValuesBigger ? double(lineSensorValues[sensorNumber] / threshold[sensorNumber]) : double(threshold[sensorNumber] / lineSensorValues[sensorNumber]));
+
+
+    //If the line sensor value is above threshold turn right
+    if (lineSensorValues[sensorNumber] > threshold[sensorNumber] * 1.1) {
+      moveForward(fastMotor, slowMotor);
+    } // else if line sensor value is lower, turn left
+    else if (lineSensorValues[sensorNumber] < threshold[sensorNumber] * 0.9) {
+      moveForward(slowMotor, fastMotor);
+    } // else move straight ahead
+    else {
+      moveForward(fastMotor, fastMotor);
+    }
+    readSensors(sensorsState);
   }
   //Stop the motors, as we've now reached the white line
   stopMotors();
 }
 
 
-//A function that follow a line until it has travelled a given distance or hit a line with the middle sensor
-void followLineDistance(int fart, double centimeters) {
-
-  //Reset totalCounts variables
-  resetTotalCounts();
-
-  //Variable for the distance travelled
-  double distance = calculateDistance(avgCounts());
-
-  //Read the sensor states
-  readSensors(sensorsState);
-  
-  //Move straight until the center sensor is white or the distance is reached
-  while ((distance < centimeters) || !sensorsState.C) {
-
-     // A boolean that determines if the lineSensorValue of the outerright sensor is bigger than the threshold for that sensor
-     bool lineValuesBigger = lineSensorValues[sensorNumber] > threshold[sensorNumber] ? 1 : 0;
-
-     //If the lineSensorValue of the outerright sensor is bigger than the threshold for that sensor, we will divide it by the threshold and get a number between
-     double fastMotor = 150 * (lineValuesBigger ? double(lineSensorValues[sensorNumber] / threshold[sensorNumber]) : double(threshold[sensorNumber] / lineSensorValues[sensorNumber]));
-     double slowMotor = 60 / (lineValuesBigger ? double(lineSensorValues[sensorNumber] / threshold[sensorNumber]) : double(threshold[sensorNumber] / lineSensorValues[sensorNumber]));
-
-       
-     //If the line sensor value is above threshold turn right
-        if (lineSensorValues[sensorNumber] > threshold[sensorNumber] * 1.1) {
-          moveForward(fastMotor,slowMotor);
-        } // else if line sensor value is lower, turn left
-        else if (lineSensorValues[sensorNumber] < threshold[sensorNumber] * 0.9) {
-          moveForward(slowMotor,fastMotor);
-        } // else move straight ahead
-        else {
-          moveForward(fastMotor,fastMotor);
-        }
-
-     //Update distance to see if distance is reached and read sensors to check if a line is reached
-     distance = calculateDistance(avgCounts());
-     readSensors(sensorsState);
-  }
-  stopMotors();
-  trackUpdate();
-}
-
 // Function that gets the average counts from the two encoders
 double avgCounts() {
 
-  //Calculate the avg encoder counts, using the
-  double avgCounts = (totalCountsL + totalCountsR) / 2;
+  //store the encoder values and find the avg value
+  int countsLeft = encoders.getCountsLeft();
+  int countsRight = encoders.getCountsRight();
+
+  //Calculate the avg encoder counts
+  double avgCounts = (countsLeft + countsRight) / 2;
+
   return avgCounts;
 }
 
-//A function that resets the global totalCount variables
-void resetTotalCounts() {
-  totalCountsL = 0;
-  totalCountsR = 0;
+//A function that resets the encoders
+void resetEncoders() {
+  int countsLeft = encoders.getCountsAndResetLeft();
+  int countsRight = encoders.getCountsAndResetRight();
 }
 
 
 //A function that calculates the distance travelled since the encoders were last reset and prints it to the LCD.
-double calculateDistance(double counts) {
+void calculateDistance(double counts) {
 
   //Calulate distance
   double distance = (counts / 909.7) * PI * 3.9 * 0.9395705277;
-  
-  //Print the distance on the LCD, uncomment to print
-  /*lcd.clear();
-  lcd.print("Cm: ");
-  lcd.gotoXY(0,1);
-  lcd.print(distance);*/
 
-  return distance;
+  //Print the distance on the LCD
+  lcd.clear();
+  lcd.print("Cm: ");
+  lcd.gotoXY(0, 1);
+  lcd.print(distance);
 }
 
 //A function that reads the line sensors and updates the sensorsState array
-void readSensors(LineSensorsWhite &state){
+void readSensors(LineSensorsWhite &state) {
 
- 
-    // Next line reads the sensor values and store them in the array lineSensorValues
-    lineSensors.read(lineSensorValues, useEmitters ? QTR_EMITTERS_ON : QTR_EMITTERS_OFF); 
 
-    // In the following lines, we use the values of the sensors to update the struct
-    sensorsState.L = (lineSensorValues[0] < threshold[0]) ? 1 : 0;
-    sensorsState.C = (lineSensorValues[1] < threshold[1]) ? 1 : 0;
-    sensorsState.R = (lineSensorValues[2] < threshold[2]) ? 1 : 0;
+  // Next line reads the sensor values and store them in the array lineSensorValues
+  lineSensors.read(lineSensorValues, useEmitters ? QTR_EMITTERS_ON : QTR_EMITTERS_OFF);
+
+  // In the following lines, we use the values of the sensors to update the struct
+  sensorsState.L = (lineSensorValues[0] < threshold[0]) ? 1 : 0;
+  sensorsState.C = (lineSensorValues[1] < threshold[1]) ? 1 : 0;
+  sensorsState.R = (lineSensorValues[2] < threshold[2]) ? 1 : 0;
 
 }
 
 //A function a that stops the motors on the Zumo32U4
 void stopMotors() {
-  motors.setSpeeds(0,0);
+  motors.setSpeeds(0, 0);
 }
 
 //A function that moves straight according to the gyro.
 void moveStraightForwardUntilLine(int fart) {
 
-  //Read the sensors to make sure the center sensor is black
   readSensors(sensorsState);
-  
-  //Reset angle to 0
   turnSensorReset();
-  
+
   //Set a variable for the angle
   int angle = (((uint32_t)turnAngle >> 16) * 360) >> 16;
 
   //Move straight until the center sensor is white.
-  while(!sensorsState.C) {
+  while (!sensorsState.C) {
 
-       //If gyro sensors angle is 0 degrees, run the same speed on both motors
-       if (angle == 0) {
-        moveForward(fart,fart);
-       }
-       //If the gyro is < 0 degrees turn slightly right
-       else if (angle < 180) {
-         moveForward(fart + 50,fart);
-       }  
-      //else if gyro is > 0 degrees turn slightly left
-       else if (angle > 180) {
-       moveForward(fart,fart + 50);
-     }
-     
-     //Update sensorsState to see if the center sensor is white.
-     readSensors(sensorsState);
-     turnSensorUpdate();
-     angle = (((uint32_t)turnAngle >> 16) * 360) >> 16;
-     lcd.clear();
-     lcd.print(angle);
-  }
-  stopMotors();
-}
+    //If gyro sensors angle is 0 degrees, run the same speed on both motors
+    if (angle == 0) {
+      moveForward(fart, fart);
+    }
+    //If the gyro is < 0 degrees turn slightly right
+    else if (angle < 180) {
+      moveForward(fart + 50, fart);
+    }
+    //else if gyro is > 0 degrees turn slightly left
+    else if (angle > 180) {
+      moveForward(fart, fart + 50);
+    }
 
-//A function that moves a given distance straight according to the gyroa and then stops
-void moveStraightDistance(int fart, double centimeters) {
-
-  //Reset totalCounts variables and turnSensor
-  resetTotalCounts();
-  turnSensorReset();
-  
-  //Set a variable for the angle
-  int angle = (((uint32_t)turnAngle >> 16) * 360) >> 16;
-  
-  //Variable for the distance travelled
-  double distance = calculateDistance(avgCounts());
-  
-  //Move straight until the center sensor is white.
-  while (distance < centimeters) {
-
-       //print LCD
-       lcd.clear();
-       lcd.print(distance);
-       lcd.gotoXY(0,1);
-       lcd.print(centimeters);
-       
-       
-       //If gyro sensors angle is 0 degrees, run the same speed on both motors
-       if (angle == 0) {
-         moveForward(fart,fart);
-       }
-       //If the gyro is < 0 degrees turn slightly right
-       else if (angle < 180) {
-         moveForward(fart + 50,fart);
-       }  
-       //else if gyro is > 0 degrees turn slightly left
-       else if (angle > 180) {
-         moveForward(fart,fart + 50);
-       }
-     
-     //Update distance to see if distance is reached and check to see if the zumo is still going straight
-     distance = calculateDistance(avgCounts());
-     turnSensorUpdate();
-     angle = (((uint32_t)turnAngle >> 16) * 360) >> 16;
-  }
-  stopMotors();
-  trackUpdate();
-}
-
-
-//Function for aligning with a detected line, and place the robot perpendicular to the line.
-void alignAndCorrect() {
-
-    //Find out which lineSensors that turned white
+    //Update sensorsState to see if the center sensor is white.
     readSensors(sensorsState);
-    int sensorIsWhite;
-    
-      if (sensorsState.L) sensorIsWhite = 0;
-      if (sensorsState.C) sensorIsWhite = 2;
-      if (sensorsState.R) sensorIsWhite = 1;
-
-      
-   switch (sensorIsWhite) {
-    
-      case 0:
-      while(!sensorsState.R) {
-        readSensors(sensorsState);
-        moveForward(-70,100);
-      }
-      stop();
-      break;
-
-      case 1:
-      while(!sensorsState.L) {
-        readSensors(sensorsState);
-        moveForward(100,-70);
-      }
-      stop();
-      break;
-
-      default:
-      lcd.clear();
-      lcd.print("Error");
-      stop();
-   }
+    turnSensorUpdate();
+    angle = (((uint32_t)turnAngle >> 16) * 360) >> 16;
+    lcd.clear();
+    lcd.print(angle);
+  }
+  motors.setSpeeds(0, 0);
+  turnSensorReset();
 }
+
+
+
 
 //
 //
@@ -451,7 +334,7 @@ void alignAndCorrect() {
 //
 //
 
-//A function that calibrates the turnsensor according to 
+//A function that calibrates the turnsensor according to
 void turnSensorSetup()
 {
   Wire.begin();
@@ -473,7 +356,7 @@ void turnSensorSetup()
   for (uint16_t i = 0; i < 1024; i++)
   {
     // Wait for new data to be available, then read it.
-    while(!imu.gyroDataReady()) {}
+    while (!imu.gyroDataReady()) {}
     imu.readGyro();
 
     // Add the Z axis reading to the total.
@@ -541,29 +424,40 @@ void turnSensorUpdate()
 //
 //
 
-//Functions that get the counts from an encoder and resets it. While updating the global variable totalCounts
-double getCountsL() {
-  double countsL = encoders.getCountsAndResetLeft();
-  totalCountsL += countsL;
-  return countsL;
-}
-
-double getCountsR() {
-  double countsR = encoders.getCountsAndResetRight();
-  totalCountsR += countsR;
-  return countsR;
-}
-
 //A function that updates that initializes the calculation of the movement since last time track() was called
 void trackUpdate() {
-  double countsL = getCountsL(); // Henter den resettede encoder-data (Skulle gerne være 0)
-  double countsR = getCountsR();
-  double avg = (countsL + countsR); //Divider med 2 :| <----------------------------------------------------------------------------------------------
-  double movement = calculateDistance(avg);
+  double countsL = encoders.getCountsAndResetLeft(); // Henter den resettede encoder-data (Skulle gerne være 0)
+  double countsR = encoders.getCountsAndResetRight();
+  double movement = ((countsL + countsR) / 900) * PI * 3.9;
   track(movement);
 }
 
+//A function that moves forward a given distance while updating position
+void moveForwardDistance(int spL, int spR, int centimeters) {
+  double distance = 0;
+  while (distance < centimeters) {
+    motors.setSpeeds(spL, spR);
+    double countsL = encoders.getCountsAndResetLeft(); // Henter den resettede encoder-data (Skulle gerne være 0)
+    double countsR = encoders.getCountsAndResetRight();
+    double movementUpdate = ((countsL + countsR) / 900) * PI * 3.9;
+    distance += movementUpdate;
+    track(movementUpdate);
+  }
+  motors.setSpeeds(0, 0);
+  trackUpdate();
+}
 
+/*A function that moves forward until line while updating position
+  void moveForwardLine(int spL, int spR) {
+  while (!sensorsState.C) {
+    motors.setSpeeds(spL, spR);
+    trackUpdate();
+    readSensors(sensorsState);
+  }
+  motors.setSpeeds(0, 0);
+  trackUpdate();
+  }
+*/
 //A function that moves foward while updating position
 void moveForward(int spL, int spR) {
   motors.setSpeeds(spL, spR);
@@ -574,7 +468,6 @@ void moveForward(int spL, int spR) {
 void turn(int speed, int grader, char direction) {
   if (direction == 'l' || direction == 'L') {
     turnSensorReset();
-    theta += grader;
     Serial.println(((((uint32_t)turnAngle >> 16) * 360) >> 16));
     while (((((uint32_t)turnAngle >> 16) * 360) >> 16) != grader) {
       Serial.println(((((uint32_t)turnAngle >> 16) * 360) >> 16));
@@ -584,20 +477,18 @@ void turn(int speed, int grader, char direction) {
     motors.setSpeeds(0, 0);
   } else if (direction == 'r' || direction == 'R') {
     turnSensorReset();
-    theta -= grader;
     while (((((uint32_t)turnAngle >> 16) * 360) >> 16) != 360 - grader) {
       motors.setSpeeds(speed, -speed);
       turnSensorUpdate();
     }
     motors.setSpeeds(0, 0);
-    encoders.getCountsAndResetLeft();
-    encoders.getCountsAndResetRight();
+    trackUpdate();
   }
 }
 
 //A function that tracks movement in the global reference frame
 void track(double distance) {
-  
+
   //read the orientatation and encoders
   radTheta = theta * PI / 180;
   v(0) = distance;
@@ -621,15 +512,236 @@ void track(double distance) {
 void returnHome() {
   //calculate the angle from the sumvector by tan(slope y / slope x)
   double angleSumV = 57.2957795 * atan2(sumV(1), sumV(0));
-
-  delay(500);
-
-  turn(100,180-theta+angleSumV,'l');
+  lcd.clear();
+  lcd.print(sumV(0));
+  lcd.gotoXY(0, 1);
+  lcd.print(sumV(1));
+  buttonA.waitForPress();
+  delay(1000);
+  lcd.clear();
+  lcd.print(angleSumV);
+  turn(100, 180 - theta + angleSumV, 'l');
   BLA::Matrix<2, 2> rotation = {cos(radTheta), sin(radTheta), -sin(radTheta), cos(radTheta)};
   BLA::Matrix<2> homeDistance = rotation * sumV;
   lcd.clear();
   lcd.print(homeDistance(0));
-  
-  //Return home 
-  moveStraightDistance(100, homeDistance(0));
+
+  moveForwardDistance(100, 100, homeDistance(0));
+
+}
+
+//
+//
+// Functions for driving pattern
+//
+//
+
+int count = 0;
+double zumoL = 8.6; //lenght of zumo in mm
+
+// Drive pattern for Zumo to be in loop
+void drivePattern () {
+
+  if (count % 2 == 0) {
+    turn(100, 90, 'R');
+    delay(1000);
+    followLine(0);
+    delay(1000);
+    alignAndCorrect();
+    delay(1000);
+    turn(100, 180, 'R');
+    delay(1000);
+    count++;
+    distF(2, count * zumoL);
+    delay(1000);
+    turn(100, 90, 'L');
+    delay(1000);
+    moveStraightForwardUntilLine(100);
+    delay(1000);
+    alignAndCorrect();
+    delay(1000);
+
+  } else {
+    turn(100, 90, 'L');
+    delay(1000);
+    followLine(2);
+    delay(1000);
+    alignAndCorrect();
+    delay(1000);
+    turn(100, 180, 'L');
+    delay(1000);
+    count++;
+    distF(0, count * zumoL);
+    delay(1000);
+    turn(100, 90, 'R');
+    delay(1000);
+    moveStraightForwardUntilLine(100);
+    delay(1000);
+    alignAndCorrect();
+
+  }
+}
+
+void alignAndCorrect() {
+
+  //Find out which lineSensors that turned white
+  readSensors(sensorsState);
+  int sensorIsWhite;
+
+  if (sensorsState.L) sensorIsWhite = 0;
+  if (sensorsState.C) sensorIsWhite = 2;
+  if (sensorsState.R) sensorIsWhite = 1;
+
+
+  switch (sensorIsWhite) {
+
+    case 0:
+      while (!sensorsState.R) {
+        readSensors(sensorsState);
+        moveForward(-70, 100);
+      }
+      stopMotors();
+      break;
+
+    case 1:
+      while (!sensorsState.L) {
+        readSensors(sensorsState);
+        moveForward(100, -70);
+      }
+      stopMotors();
+      break;
+
+    default:
+      lcd.clear();
+      lcd.print("Error");
+      stopMotors();
+      readSensors(sensorsState);
+  }
+}
+
+
+// Function that follows a line for a distance: count * 86mm
+void followLineDistance(int sensorNumber, int milimeters) {
+  readSensors(sensorsState);
+  double distance = 0;
+
+  //while center sensor is NOT white, follow the line a certain distance.
+  while (!sensorsState.C && distance < milimeters ) {
+
+    // A boolean that determines if the lineSensorValue of the outerright sensor is bigger than the threshold for that sensor
+    bool lineValuesBigger = lineSensorValues[sensorNumber] > threshold[sensorNumber] ? 1 : 0;
+
+    //If the lineSensorValue of the outerright sensor is bigger than the threshold for that sensor, we will divide it by the threshold and get a number between
+    double fastMotor = 150 * (lineValuesBigger ? double(lineSensorValues[sensorNumber] / threshold[sensorNumber]) : double(threshold[sensorNumber] / lineSensorValues[sensorNumber]));
+    double slowMotor = 60 / (lineValuesBigger ? double(lineSensorValues[sensorNumber] / threshold[sensorNumber]) : double(threshold[sensorNumber] / lineSensorValues[sensorNumber]));
+
+
+    //If the line sensor value is above threshold turn right
+    if (lineSensorValues[sensorNumber] > threshold[sensorNumber] * 1.1) {
+      moveForward(fastMotor, slowMotor);
+
+    } // else if line sensor value is lower, turn left
+    else if (lineSensorValues[sensorNumber] < threshold[sensorNumber] * 0.9) {
+      moveForward(slowMotor, fastMotor);
+
+    } // else move straight ahead
+    else {
+      moveForward(fastMotor, fastMotor);
+      lcd.clear();
+      lcd.print(milimeters);
+      lcd.gotoXY(0, 1);
+      lcd.print(distance);
+      delay(50);
+    }
+    double countsL = encoders.getCountsAndResetLeft();
+    double countsR = encoders.getCountsAndResetRight();
+    double movementUpdate = ((countsL + countsR) / 2 / 900) * PI * 3.9;
+    distance += movementUpdate;
+
+
+    readSensors(sensorsState);
+
+    //Stop the motors, as we've now reached the white line
+    stopMotors();
+    trackUpdate();
+  }
+}
+
+void distF (int sensorNumber, int milimeters) {
+  readSensors(sensorsState);
+  double distance = 0;
+
+  //while center sensor is NOT white, follow the line a certain distance.
+  while (!sensorsState.C && distance < milimeters ) {
+
+    // A boolean that determines if the lineSensorValue of the outerright sensor is bigger than the threshold for that sensor
+    bool lineValuesBigger = lineSensorValues[sensorNumber] > threshold[sensorNumber] ? 1 : 0;
+
+    //If the lineSensorValue of the outerright sensor is bigger than the threshold for that sensor, we will divide it by the threshold and get a number between
+    double fastMotor = 150 * (lineValuesBigger ? double(lineSensorValues[sensorNumber] / threshold[sensorNumber]) : double(threshold[sensorNumber] / lineSensorValues[sensorNumber]));
+    double slowMotor = 60 / (lineValuesBigger ? double(lineSensorValues[sensorNumber] / threshold[sensorNumber]) : double(threshold[sensorNumber] / lineSensorValues[sensorNumber]));
+
+    switch (sensorNumber) {
+      case 0:
+        if (lineSensorValues[sensorNumber] > threshold[sensorNumber] * 1.1) {
+          moveForward(slowMotor, fastMotor);
+
+        } // else if line sensor value is lower, turn left
+        else if (lineSensorValues[sensorNumber] < threshold[sensorNumber] * 0.9) {
+          moveForward(fastMotor, slowMotor);
+          double countsL = encoders.getCountsAndResetLeft();
+          double countsR = encoders.getCountsAndResetRight();
+          double movementUpdate = (((countsL + countsR) / 2) / 900) * PI * 3.9;
+          distance += movementUpdate;
+          readSensors(sensorsState);
+
+        } // else move straight ahead
+        else {
+          moveForward(fastMotor, fastMotor);
+          double countsL = encoders.getCountsAndResetLeft();
+          double countsR = encoders.getCountsAndResetRight();
+          double movementUpdate = (((countsL + countsR) / 2) / 900) * PI * 3.9;
+          distance += movementUpdate;
+          readSensors(sensorsState);
+
+        }
+        break;
+
+      case 2:
+        if (lineSensorValues[sensorNumber] > threshold[sensorNumber] * 1.1) {
+          moveForward( fastMotor, slowMotor);
+          double countsL = encoders.getCountsAndResetLeft();
+          double countsR = encoders.getCountsAndResetRight();
+          double movementUpdate = (((countsL + countsR) / 2) / 900) * PI * 3.9;
+          distance += movementUpdate;
+          readSensors(sensorsState);
+
+        } // else if line sensor value is lower, turn left
+        else if (lineSensorValues[sensorNumber] < threshold[sensorNumber] * 0.9) {
+          moveForward(slowMotor, fastMotor);
+          double countsL = encoders.getCountsAndResetLeft();
+          double countsR = encoders.getCountsAndResetRight();
+          double movementUpdate = (((countsL + countsR) / 2) / 900) * PI * 3.9;
+          distance += movementUpdate;
+          readSensors(sensorsState);
+
+        } // else move straight ahead
+        else {
+          moveForward(fastMotor, fastMotor);
+          double countsL = encoders.getCountsAndResetLeft();
+          double countsR = encoders.getCountsAndResetRight();
+          double movementUpdate = (((countsL + countsR) / 2) / 900) * PI * 3.9;
+          distance += movementUpdate;
+          readSensors(sensorsState);
+
+        }
+        break;
+
+    }
+
+
+    //Stop the motors, as we've now reached the white line
+    stopMotors();
+    trackUpdate();
+  }
 }
