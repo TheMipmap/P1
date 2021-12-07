@@ -11,6 +11,7 @@ Zumo32U4LCD lcd;
 Zumo32U4ButtonA buttonA;
 Zumo32U4LineSensors lineSensors;
 Zumo32U4IMU imu;
+Zumo32U4ProximitySensors proxSensors;
 
 //
 //
@@ -18,8 +19,18 @@ Zumo32U4IMU imu;
 //
 //
 
+
+//Define the number of brightnesslevels
+#define numberOfBrightnessLevels 10
+
 //Define the number of line sensors
 #define NUM_SENSORS 3
+
+//Array for defining brightnesslevels
+int brightnessLevels[numberOfBrightnessLevels];
+
+//Variable for determining what the proximity is detecting. 0 is nothing, 1 is obstacle, 2 is wad
+int proxStatus = 0;
 
 //Struct that know whether or not the individuel line sensors detects white or black
 struct LineSensorsWhite { // True if White, False if Black
@@ -96,10 +107,22 @@ BLA::Matrix<2> sumV;
 
 void setup() {
   // Code that runs once before the loop() function
-
+ 
   //Start Serial communication between the computer and the zumo
   Serial.begin(9600);
 
+  //Initialize the 3 proximity sensors
+  proxSensors.initThreeSensors();
+
+  //For-loop that fill the birgtnesslevels-array
+  for (int i = 0; i < numberOfBrightnessLevels; i++) {
+    brightnessLevels[i] = i;
+    Serial.println("Brightnesslevel(" + String(i) + ") = " + String(brightnessLevels[i]));
+  }
+
+  //Manuelly configure the brightnesslevels of the proximity sensors
+  proxSensors.setBrightnessLevels(brightnessLevels, numberOfBrightnessLevels);
+  
   //Resets the sum vector
   sumV.Fill(0);
   
@@ -202,6 +225,7 @@ void calibrateThreshold() {
 // Function that follows a line
 void followLine(int sensorNumber) {
 
+  // 
   //Read linesensors to check if middle sensor is white
   readSensors(sensorsState);
   
@@ -218,10 +242,25 @@ void followLine(int sensorNumber) {
        
      //If the line sensor value is above threshold turn right
         if (lineSensorValues[sensorNumber] > threshold[sensorNumber] * 1.1) {
-          moveForward(fastMotor,slowMotor);
+
+          //If the it if uses the left sensor, the robot should turn left when this happens
+          if (sensorNumber == 0) {
+             moveForward(slowMotor, fastMotor);
+          } else {
+             //else do the normal turn right
+             moveForward(fastMotor,slowMotor);
+          }
         } // else if line sensor value is lower, turn left
         else if (lineSensorValues[sensorNumber] < threshold[sensorNumber] * 0.9) {
-          moveForward(slowMotor,fastMotor);
+
+          if (sensorNumber == 0) {
+              // If it uses left sensor it should turn right here
+              moveForward(fastMotor,slowMotor);
+          } else {
+            //Else do the normal left turn
+              moveForward(slowMotor,fastMotor);
+          }
+        
         } // else move straight ahead
         else {
           moveForward(fastMotor,fastMotor);
@@ -234,7 +273,7 @@ void followLine(int sensorNumber) {
 
 
 //A function that follow a line until it has travelled a given distance or hit a line with the middle sensor
-void followLineDistance(int fart, double centimeters) {
+void followLineDistance(double centimeters, int sensorNumber) {
 
   //Reset totalCounts variables
   resetTotalCounts();
@@ -258,15 +297,30 @@ void followLineDistance(int fart, double centimeters) {
        
      //If the line sensor value is above threshold turn right
         if (lineSensorValues[sensorNumber] > threshold[sensorNumber] * 1.1) {
-          moveForward(fastMotor,slowMotor);
+
+          //If the it if uses the left sensor, the robot should turn left when this happens
+          if (sensorNumber == 0) {
+             moveForward(slowMotor, fastMotor);
+          } else {
+             //else do the normal turn right
+             moveForward(fastMotor,slowMotor);
+          }
         } // else if line sensor value is lower, turn left
         else if (lineSensorValues[sensorNumber] < threshold[sensorNumber] * 0.9) {
-          moveForward(slowMotor,fastMotor);
+
+          if (sensorNumber == 0) {
+              // If it uses left sensor it should turn right here
+              moveForward(fastMotor,slowMotor);
+          } else {
+            //Else do the normal left turn
+              moveForward(slowMotor,fastMotor);
+          }
+        
         } // else move straight ahead
         else {
           moveForward(fastMotor,fastMotor);
         }
-
+        
      //Update distance to see if distance is reached and read sensors to check if a line is reached
      distance = calculateDistance(avgCounts());
      readSensors(sensorsState);
@@ -427,7 +481,7 @@ void alignAndCorrect() {
         readSensors(sensorsState);
         moveForward(-70,100);
       }
-      stop();
+      stopMotors();
       break;
 
       case 1:
@@ -435,13 +489,13 @@ void alignAndCorrect() {
         readSensors(sensorsState);
         moveForward(100,-70);
       }
-      stop();
+      stopMotors();
       break;
 
       default:
       lcd.clear();
       lcd.print("Error");
-      stop();
+      stopMotors();
    }
 }
 
@@ -572,6 +626,11 @@ void moveForward(int spL, int spR) {
 
 //A function that turns a given angle in a given direction
 void turn(int speed, int grader, char direction) {
+  
+  //Reset encoders and save prior counts into totalCounts
+  getCountsR();
+  getCountsL();
+  
   if (direction == 'l' || direction == 'L') {
     turnSensorReset();
     theta += grader;
@@ -632,4 +691,180 @@ void returnHome() {
   
   //Return home 
   moveStraightDistance(100, homeDistance(0));
+}
+
+
+//
+//
+//Functions for proximity sensors
+//
+//
+
+void proxRead() {
+  proxSensors.read();
+  int proximityLeft = proxSensors.countsFrontWithLeftLeds();
+  int proximityRight = proxSensors.countsFrontWithRightLeds();
+  Serial.println("proxLeft: " + String(proximityLeft) + " // " + "proxRight: " + String(proximityRight));
+  if (proximityRight == 9 || proximityLeft == 9) { //If something triggers this number, there is either an obstacle or wad in front of the robot
+    stopMotors();
+    moveStraightDistance(100,10); //move forward to check the number again,
+    proxSensors.read();
+    proximityLeft = proxSensors.countsFrontWithLeftLeds();
+    proximityRight = proxSensors.countsFrontWithRightLeds();
+    if (proximityRight <= 8 || proximityLeft <= 8) {
+      if(proximityLeft < proximityRight){
+        turn(100, 35, 'r');
+        proxSensors.read();
+        proximityLeft = proxSensors.countsFrontWithLeftLeds();
+        proximityRight = proxSensors.countsFrontWithRightLeds();
+        if(proximityRight > 8){
+          proxStatus = 1;
+        }else{
+          proxStatus = 2; //Define the status of the proximity readings as detecting a wad.
+        }
+        turn(100, 35, 'l');
+      }else if(proximityLeft > proximityRight){
+        turn(100, 35, 'l');
+        proxSensors.read();
+        proximityLeft = proxSensors.countsFrontWithLeftLeds();
+        proximityRight = proxSensors.countsFrontWithRightLeds();
+        if(proximityLeft > 8){
+          proxStatus = 1;
+        }else{
+          proxStatus = 2; //Define the status of the proximity readings as detecting a wad.
+        }
+        turn(100, 35, 'r');
+      }
+    }
+    else {
+      proxStatus = 1; //Define the status of the proximity readings as detecting an obstacle.
+    }
+  }
+  lcd.clear();
+  lcd.print("L:" + String(proximityLeft) + "R:" + String(proximityRight));
+}
+
+
+void avoidObsticaleLeft(){
+
+  turn( 100, 90, 'l');
+              
+       //--- første omdrejning omkring objekt---
+       
+       proxSensors.read();
+       int proximityRight = proxSensors.countsRightWithRightLeds();
+       resetTotalCounts();
+       while (proximityRight >= 4){
+       
+      
+          moveForward(100,100);
+            proxSensors.read();
+              proximityRight = proxSensors.countsRightWithRightLeds();
+       
+       }
+       
+        stopMotors();
+        delay(1000);
+        moveStraightDistance(100,10);
+        delay(1000);
+        int totalDistance = calculateDistance(totalCountsL);
+        
+            turn( 100, 90, 'r');
+            proxSensors.read();
+            proximityRight = proxSensors.countsRightWithRightLeds();
+            while (proximityRight <=6){
+            proxSensors.read();
+            proximityRight = proxSensors.countsRightWithRightLeds();
+            moveForward(100,100);
+          
+        }
+         
+       stopMotors();
+       
+       
+       
+       //---anden omdrengning omkring objekt---
+       
+      
+       proxSensors.read();
+       proximityRight = proxSensors.countsRightWithRightLeds();
+       while (proximityRight >= 6){
+       
+       proxSensors.read();
+       proximityRight = proxSensors.countsRightWithRightLeds();
+       moveForward(100,100);
+       }
+       stopMotors();
+       
+       
+        moveStraightDistance(100,10);
+        delay(1000);
+        turn( 100, 90, 'r');
+        moveStraightDistance(100,totalDistance);
+        turn(100, 90, 'l');
+        
+       
+  
+}
+
+void avoidObsticaleRight(){
+  
+  turn( 100, 90, 'r');
+              
+       //--- første omdrejning omkring objekt---
+       
+       proxSensors.read();
+       int proximityRight = proxSensors.countsRightWithRightLeds();
+       resetTotalCounts();
+       while (proximityRight >= 4){
+       
+      
+          moveForward(100,100);
+            proxSensors.read();
+              proximityRight = proxSensors.countsRightWithRightLeds();
+       
+       }
+       
+        stopMotors();
+        delay(1000);
+        moveStraightDistance(100,10);
+        delay(1000);
+        int totalDistance = calculateDistance(totalCountsL);
+        
+            turn( 100, 90, 'l');
+            proxSensors.read();
+            proximityRight = proxSensors.countsRightWithRightLeds();
+            while (proximityRight <=6){
+            proxSensors.read();
+            proximityRight = proxSensors.countsRightWithRightLeds();
+            moveForward(100,100);
+          
+        }
+         
+       stopMotors();
+       
+       
+       
+       //---anden omdrengning omkring objekt---
+       
+      
+       proxSensors.read();
+       proximityRight = proxSensors.countsRightWithRightLeds();
+       while (proximityRight >= 6){
+       
+       proxSensors.read();
+       proximityRight = proxSensors.countsRightWithRightLeds();
+       moveForward(100,100);
+       }
+       stopMotors();
+       
+       
+        moveStraightDistance(100,10);
+        delay(1000);
+        turn( 100, 90, 'l');
+        moveStraightDistance(100,totalDistance);
+        turn(100, 90, 'r');
+        
+       
+         
 }
