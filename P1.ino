@@ -105,7 +105,7 @@ BLA::Matrix<2> sumV;
 
 
 
-void setup() {
+void setup() { //------------------------------------------------------------------------------------------------------------------------------------------------------------
   // Code that runs once before the loop() function
  
   //Start Serial communication between the computer and the zumo
@@ -139,24 +139,40 @@ void setup() {
   
   //Reset the encoders to make sure the robot is ready to follow the line and measuere the distance
   resetTotalCounts();
-
+/*
   //Call the followLine function
   followLine(2);
 
   //Call the calculateDistance function, that 
   calculateDistance(avgCounts());
+  */
 }
 
+int stage = 1;
 
-
-void loop() {
+void loop() { //---------------------------------------------------------------------------------------------------------------------------------------------------
   //Code that loops over and over again until the robot stops.
-     delay(100);
-     turn(100, 90, 'l');
-     moveStraightDistance(100, 40);
-     returnHome();
-     buttonA.waitForPress();
+     if (stage = 1) {
+         delay(100);
+         turn(100, 90, 'l');
+         moveStraightForwardUntilLine(100);
+
+         
+
+         buttonA.waitForPress();
+         returnHome();
+
+         
+         buttonA.waitForPress();
+         stage = 2;
+     }
+     if (stage = 2);
 }
+
+
+
+
+
 
 //
 //
@@ -225,7 +241,7 @@ void calibrateThreshold() {
 // Function that follows a line
 void followLine(int sensorNumber) {
 
-  // 
+  
   //Read linesensors to check if middle sensor is white
   readSensors(sensorsState);
   
@@ -275,11 +291,13 @@ void followLine(int sensorNumber) {
 //A function that follow a line until it has travelled a given distance or hit a line with the middle sensor
 void followLineDistance(double centimeters, int sensorNumber) {
 
-  //Reset totalCounts variables
-  resetTotalCounts();
+  
 
-  //Variable for the distance travelled
-  double distance = calculateDistance(avgCounts());
+  //Variable to know what the 'distance' is at the start
+  double distanceStart = calculateDistance(avgCounts());
+
+  //Variable for the newDistance (Should be the same as centimeters at the end of the function) 
+  double distance = 0;
 
   //Read the sensor states
   readSensors(sensorsState);
@@ -322,7 +340,7 @@ void followLineDistance(double centimeters, int sensorNumber) {
         }
         
      //Update distance to see if distance is reached and read sensors to check if a line is reached
-     distance = calculateDistance(avgCounts());
+     distance = calculateDistance(avgCounts()) - distanceStart;
      readSensors(sensorsState);
   }
   stopMotors();
@@ -332,7 +350,7 @@ void followLineDistance(double centimeters, int sensorNumber) {
 // Function that gets the average counts from the two encoders
 double avgCounts() {
 
-  //Calculate the avg encoder counts, using the
+  //Calculate the avg number of counts
   double avgCounts = (totalCountsL + totalCountsR) / 2;
   return avgCounts;
 }
@@ -392,7 +410,10 @@ void moveStraightForwardUntilLine(int fart) {
 
   //Move straight until the center sensor is white.
   while(!sensorsState.C) {
-
+       
+       //Call prox read, to check if there are obstacles
+        proxRead();
+       
        //If gyro sensors angle is 0 degrees, run the same speed on both motors
        if (angle == 0) {
         moveForward(fart,fart);
@@ -412,6 +433,7 @@ void moveStraightForwardUntilLine(int fart) {
      angle = (((uint32_t)turnAngle >> 16) * 360) >> 16;
      lcd.clear();
      lcd.print(angle);
+
   }
   stopMotors();
 }
@@ -419,15 +441,16 @@ void moveStraightForwardUntilLine(int fart) {
 //A function that moves a given distance straight according to the gyroa and then stops
 void moveStraightDistance(int fart, double centimeters) {
 
-  //Reset totalCounts variables and turnSensor
-  resetTotalCounts();
-  turnSensorReset();
+  
+  //Variable for new distance 
+  double distance = 0;
+  
+  //Variable for distance at the start
+  double distanceStart = calculateDistance(avgCounts());
   
   //Set a variable for the angle
   int angle = (((uint32_t)turnAngle >> 16) * 360) >> 16;
   
-  //Variable for the distance travelled
-  double distance = calculateDistance(avgCounts());
   
   //Move straight until the center sensor is white.
   while (distance < centimeters) {
@@ -453,7 +476,7 @@ void moveStraightDistance(int fart, double centimeters) {
        }
      
      //Update distance to see if distance is reached and check to see if the zumo is still going straight
-     distance = calculateDistance(avgCounts());
+     distance = calculateDistance(avgCounts()) - distanceStart;
      turnSensorUpdate();
      angle = (((uint32_t)turnAngle >> 16) * 360) >> 16;
   }
@@ -501,7 +524,7 @@ void alignAndCorrect() {
 
 //
 //
-//Functions involving the gyro and linesensors
+//Functions involving the gyro and linesensors -----------------------------------------------------------------------------------------------------------------
 //
 //
 
@@ -591,7 +614,7 @@ void turnSensorUpdate()
 
 //
 //
-//Function for zumo positioning
+//Function for zumo positioning -----------------------------------------------------------------------------------------------------------------------------------------------------
 //
 //
 
@@ -612,7 +635,7 @@ double getCountsR() {
 void trackUpdate() {
   double countsL = getCountsL(); // Henter den resettede encoder-data (Skulle gerne være 0)
   double countsR = getCountsR();
-  double avg = (countsL + countsR); //Divider med 2 :| <----------------------------------------------------------------------------------------------
+  double avg = (countsL + countsR) / 2; //Divider med 2 :| <----------------------------------------------------------------------------------------------
   double movement = calculateDistance(avg);
   track(movement);
 }
@@ -696,7 +719,7 @@ void returnHome() {
 
 //
 //
-//Functions for proximity sensors
+//Functions for proximity sensors-------------------------------------------------------------------------------------------------------------------------------------
 //
 //
 
@@ -742,10 +765,14 @@ void proxRead() {
   }
   lcd.clear();
   lcd.print("L:" + String(proximityLeft) + "R:" + String(proximityRight));
+  if(proxStatus != 0){
+    avoidObstacleLeft();
+  }
+  proxStatus = 0;
 }
 
 
-void avoidObsticaleLeft(){
+void avoidObstacleLeft(){
 
   turn( 100, 90, 'l');
               
@@ -754,25 +781,30 @@ void avoidObsticaleLeft(){
        proxSensors.read();
        int proximityRight = proxSensors.countsRightWithRightLeds();
        resetTotalCounts();
-       while (proximityRight >= 4){
-       
-      
+       while (proximityRight >= 5){
+
           moveForward(100,100);
-            proxSensors.read();
-              proximityRight = proxSensors.countsRightWithRightLeds();
+          proxSensors.read();
+          proximityRight = proxSensors.countsRightWithRightLeds();
        
        }
        
         stopMotors();
         delay(1000);
-        moveStraightDistance(100,10);
+        moveStraightDistance(100,12);
         delay(1000);
-        int totalDistance = calculateDistance(totalCountsL);
-        
+        double totalDistance = calculateDistance(totalCountsL);
+        lcd.clear();
+        lcd.print("Cm: " + String(totalDistance));
+        delay(500);
             turn( 100, 90, 'r');
             proxSensors.read();
             proximityRight = proxSensors.countsRightWithRightLeds();
-            while (proximityRight <=6){
+            while (proximityRight <=5){
+            lcd.clear();
+            lcd.print("before obs");
+            lcd.gotoXY(0,1);
+            lcd.print(proximityRight);
             proxSensors.read();
             proximityRight = proxSensors.countsRightWithRightLeds();
             moveForward(100,100);
@@ -788,8 +820,11 @@ void avoidObsticaleLeft(){
       
        proxSensors.read();
        proximityRight = proxSensors.countsRightWithRightLeds();
-       while (proximityRight >= 6){
-       
+       while (proximityRight >= 5){
+        lcd.clear();
+            lcd.print("beside obs");
+            lcd.gotoXY(0,1);
+            lcd.print(proximityRight);
        proxSensors.read();
        proximityRight = proxSensors.countsRightWithRightLeds();
        moveForward(100,100);
@@ -797,7 +832,7 @@ void avoidObsticaleLeft(){
        stopMotors();
        
        
-        moveStraightDistance(100,10);
+        moveStraightDistance(100,12);
         delay(1000);
         turn( 100, 90, 'r');
         moveStraightDistance(100,totalDistance);
@@ -807,64 +842,9 @@ void avoidObsticaleLeft(){
   
 }
 
-void avoidObsticaleRight(){
+void avoidObstacleRight(){
   
-  turn( 100, 90, 'r');
-              
-       //--- første omdrejning omkring objekt---
-       
-       proxSensors.read();
-       int proximityRight = proxSensors.countsRightWithRightLeds();
-       resetTotalCounts();
-       while (proximityRight >= 4){
-       
-      
-          moveForward(100,100);
-            proxSensors.read();
-              proximityRight = proxSensors.countsRightWithRightLeds();
-       
-       }
-       
-        stopMotors();
-        delay(1000);
-        moveStraightDistance(100,10);
-        delay(1000);
-        int totalDistance = calculateDistance(totalCountsL);
-        
-            turn( 100, 90, 'l');
-            proxSensors.read();
-            proximityRight = proxSensors.countsRightWithRightLeds();
-            while (proximityRight <=6){
-            proxSensors.read();
-            proximityRight = proxSensors.countsRightWithRightLeds();
-            moveForward(100,100);
-          
-        }
-         
-       stopMotors();
-       
-       
-       
-       //---anden omdrengning omkring objekt---
-       
-      
-       proxSensors.read();
-       proximityRight = proxSensors.countsRightWithRightLeds();
-       while (proximityRight >= 6){
-       
-       proxSensors.read();
-       proximityRight = proxSensors.countsRightWithRightLeds();
-       moveForward(100,100);
-       }
-       stopMotors();
-       
-       
-        moveStraightDistance(100,10);
-        delay(1000);
-        turn( 100, 90, 'l');
-        moveStraightDistance(100,totalDistance);
-        turn(100, 90, 'r');
-        
+//kopier den anden og fix
        
          
 }
