@@ -19,6 +19,14 @@ Zumo32U4ProximitySensors proxSensors;
 //
 //
 
+//Obstacle located on the left or the right side of the robot:  0 = left ----- 1 = right
+bool obstacleRL = 0;
+
+//Iterations of the drive pattern it uses while seaching for wads
+int iteration = 0;
+
+//lenght of zumo in cm (8.6)
+double zumoL = 8.6;
 
 //Define the number of brightnesslevels
 #define numberOfBrightnessLevels 10
@@ -139,34 +147,21 @@ void setup() { //---------------------------------------------------------------
   
   //Reset the encoders to make sure the robot is ready to follow the line and measuere the distance
   resetTotalCounts();
-/*
-  //Call the followLine function
-  followLine(2);
-
-  //Call the calculateDistance function, that 
-  calculateDistance(avgCounts());
-  */
 }
 
 int stage = 1;
 
 void loop() { //---------------------------------------------------------------------------------------------------------------------------------------------------
   //Code that loops over and over again until the robot stops.
-     if (stage = 1) {
-         delay(100);
-         turn(100, 90, 'l');
-         moveStraightForwardUntilLine(100);
-
-         
-
-         buttonA.waitForPress();
-         returnHome();
-
-         
-         buttonA.waitForPress();
-         stage = 2;
+     if (stage == 1) {
+         drivePattern();
      }
-     if (stage = 2);
+     if (stage == 2) {
+      //if there are 3 wads onboard the zumo
+      lcd.clear();
+      lcd.print("3/3 wads");
+      buttonA.waitForPress();
+     }
 }
 
 
@@ -291,25 +286,22 @@ void followLine(int sensorNumber) {
 //A function that follow a line until it has travelled a given distance or hit a line with the middle sensor
 void followLineDistance(double centimeters, int sensorNumber) {
 
-  
+  resetTotalCounts();
 
-  //Variable to know what the 'distance' is at the start
-  double distanceStart = calculateDistance(avgCounts());
-
-  //Variable for the newDistance (Should be the same as centimeters at the end of the function) 
-  double distance = 0;
+  //Variable for the distance
+  double distance = calculateDistance(avgCounts());
 
   //Read the sensor states
   readSensors(sensorsState);
   
   //Move straight until the center sensor is white or the distance is reached
-  while ((distance < centimeters) || !sensorsState.C) {
+  while ((distance < centimeters) && !sensorsState.C) {
 
      // A boolean that determines if the lineSensorValue of the outerright sensor is bigger than the threshold for that sensor
      bool lineValuesBigger = lineSensorValues[sensorNumber] > threshold[sensorNumber] ? 1 : 0;
 
      //If the lineSensorValue of the outerright sensor is bigger than the threshold for that sensor, we will divide it by the threshold and get a number between
-     double fastMotor = 150 * (lineValuesBigger ? double(lineSensorValues[sensorNumber] / threshold[sensorNumber]) : double(threshold[sensorNumber] / lineSensorValues[sensorNumber]));
+     double fastMotor = 120 * (lineValuesBigger ? double(lineSensorValues[sensorNumber] / threshold[sensorNumber]) : double(threshold[sensorNumber] / lineSensorValues[sensorNumber]));
      double slowMotor = 60 / (lineValuesBigger ? double(lineSensorValues[sensorNumber] / threshold[sensorNumber]) : double(threshold[sensorNumber] / lineSensorValues[sensorNumber]));
 
        
@@ -340,8 +332,9 @@ void followLineDistance(double centimeters, int sensorNumber) {
         }
         
      //Update distance to see if distance is reached and read sensors to check if a line is reached
-     distance = calculateDistance(avgCounts()) - distanceStart;
+     distance = calculateDistance(avgCounts());
      readSensors(sensorsState);
+     showDistance(distance, centimeters);
   }
   stopMotors();
   trackUpdate();
@@ -441,13 +434,16 @@ void moveStraightForwardUntilLine(int fart) {
 //A function that moves a given distance straight according to the gyroa and then stops
 void moveStraightDistance(int fart, double centimeters) {
 
+
+  //Reset total counts variables
+  resetTotalCounts();
   
   //Variable for new distance 
   double distance = 0;
-  
-  //Variable for distance at the start
-  double distanceStart = calculateDistance(avgCounts());
-  
+
+  //Reset angle to 0
+  turnSensorReset();
+
   //Set a variable for the angle
   int angle = (((uint32_t)turnAngle >> 16) * 360) >> 16;
   
@@ -476,7 +472,7 @@ void moveStraightDistance(int fart, double centimeters) {
        }
      
      //Update distance to see if distance is reached and check to see if the zumo is still going straight
-     distance = calculateDistance(avgCounts()) - distanceStart;
+     distance = calculateDistance(avgCounts());
      turnSensorUpdate();
      angle = (((uint32_t)turnAngle >> 16) * 360) >> 16;
   }
@@ -517,7 +513,7 @@ void alignAndCorrect() {
 
       default:
       lcd.clear();
-      lcd.print("Error");
+      lcd.print("Straight");
       stopMotors();
    }
 }
@@ -728,7 +724,7 @@ void proxRead() {
   int proximityLeft = proxSensors.countsFrontWithLeftLeds();
   int proximityRight = proxSensors.countsFrontWithRightLeds();
   Serial.println("proxLeft: " + String(proximityLeft) + " // " + "proxRight: " + String(proximityRight));
-  if (proximityRight == 9 || proximityLeft == 9) { //If something triggers this number, there is either an obstacle or wad in front of the robot
+  if (proximityRight >= 9 || proximityLeft >= 9) { //If something triggers this number, there is either an obstacle or wad in front of the robot
     stopMotors();
     moveStraightDistance(100,10); //move forward to check the number again,
     proxSensors.read();
@@ -741,7 +737,8 @@ void proxRead() {
         proximityLeft = proxSensors.countsFrontWithLeftLeds();
         proximityRight = proxSensors.countsFrontWithRightLeds();
         if(proximityRight > 8){
-          proxStatus = 1;
+          proxStatus = 1; //Define the status of the proximity readings as detecting an obstacle
+          obstacleRL = 1;
         }else{
           proxStatus = 2; //Define the status of the proximity readings as detecting a wad.
         }
@@ -752,9 +749,12 @@ void proxRead() {
         proximityLeft = proxSensors.countsFrontWithLeftLeds();
         proximityRight = proxSensors.countsFrontWithRightLeds();
         if(proximityLeft > 8){
-          proxStatus = 1;
+          proxStatus = 1; //Define the status of the proximity readings as detecting an obstacle
+          obstacleRL = 0;
         }else{
           proxStatus = 2; //Define the status of the proximity readings as detecting a wad.
+          lcd.clear();
+          lcd.print("Wad spotted");
         }
         turn(100, 35, 'r');
       }
@@ -765,8 +765,10 @@ void proxRead() {
   }
   lcd.clear();
   lcd.print("L:" + String(proximityLeft) + "R:" + String(proximityRight));
-  if(proxStatus != 0){
+  if(proxStatus == 1 && iteration % 2 == 0){
     avoidObstacleLeft();
+  } else if (proxStatus == 1 && iteration % 2 == 1) {
+    avoidObstacleRight();  
   }
   proxStatus = 0;
 }
@@ -774,6 +776,87 @@ void proxRead() {
 
 void avoidObstacleLeft(){
 
+  turn( 100, 90, 'r');
+              
+       //--- første omdrejning omkring objekt---
+       
+       proxSensors.read();
+       int proximityRight = proxSensors.countsLeftWithLeftLeds();
+       resetTotalCounts();
+
+       if(proximityRight <= 5 && obstacleRL == 0){
+        while(proximityRight <= 5){
+          proxSensors.read();
+          proximityRight = proxSensors.countsLeftWithLeftLeds();
+          moveForward(-100, -100);
+        }
+        stopMotors();
+       }
+       
+       while (proximityRight >= 5){
+
+          moveForward(100,100);
+          proxSensors.read();
+          proximityRight = proxSensors.countsLeftWithLeftLeds();
+       
+       }
+       
+        stopMotors();
+        delay(1000);
+        moveStraightDistance(100,12);
+        delay(1000);
+        double totalDistance = calculateDistance(totalCountsL);
+        lcd.clear();
+        lcd.print("Cm: " + String(totalDistance));
+        delay(500);
+            turn( 100, 90, 'l');
+            proxSensors.read();
+            proximityRight = proxSensors.countsLeftWithLeftLeds();
+            while (proximityRight <=5){
+            lcd.clear();
+            lcd.print("before obs");
+            lcd.gotoXY(0,1);
+            lcd.print(proximityRight);
+            proxSensors.read();
+            proximityRight = proxSensors.countsLeftWithLeftLeds();
+            moveForward(100,100);
+          
+        }
+         
+       stopMotors();
+       
+       
+       
+       //---anden omdrengning omkring objekt---
+       
+      
+       proxSensors.read();
+       proximityRight = proxSensors.countsLeftWithLeftLeds();
+       while (proximityRight >= 5){
+        lcd.clear();
+            lcd.print("beside obs");
+            lcd.gotoXY(0,1);
+            lcd.print(proximityRight);
+       proxSensors.read();
+       proximityRight = proxSensors.countsLeftWithLeftLeds();
+       moveForward(100,100);
+       }
+       stopMotors();
+       
+       
+        moveStraightDistance(100,12);
+        delay(1000);
+        turn( 100, 90, 'l');
+        moveStraightDistance(100,totalDistance);
+        turn(100, 90, 'r');
+        
+       
+  
+}
+
+void avoidObstacleRight(){
+
+   
   turn( 100, 90, 'l');
               
        //--- første omdrejning omkring objekt---
@@ -781,6 +864,16 @@ void avoidObstacleLeft(){
        proxSensors.read();
        int proximityRight = proxSensors.countsRightWithRightLeds();
        resetTotalCounts();
+
+       if(proximityRight <= 5 && obstacleRL == 1){
+        while(proximityRight <= 5){
+          proxSensors.read();
+          proximityRight = proxSensors.countsRightWithRightLeds();
+          moveForward(-100, -100);
+        }
+        stopMotors();
+       }
+       
        while (proximityRight >= 5){
 
           moveForward(100,100);
@@ -836,15 +929,86 @@ void avoidObstacleLeft(){
         delay(1000);
         turn( 100, 90, 'r');
         moveStraightDistance(100,totalDistance);
-        turn(100, 90, 'l');
-        
-       
-  
+        turn(100, 90, 'l'); 
 }
 
-void avoidObstacleRight(){
+
+//Print the two parameters to the lcd
+void showDistance(double distance, double milimeter) {
+  lcd.clear();
+  lcd.print(milimeter);
+  lcd.gotoXY(0, 1);
+  lcd.print(distance);
+}
+
+
+
+// Drive pattern for Zumo to search the field
+void drivePattern () {
+
+  if (iteration == 0) {
+      //Call the followLine function
+      followLine(2);
   
-//kopier den anden og fix
-       
-         
+     moveStraightDistance(100,1);
+     delay(100);
+  
+     //Turn left
+     turn(100, 90, 'L');
+     delay(100);
+
+     //Follow outerline again
+     followLine(2);
+  }
+
+  
+
+  if (iteration % 2 == 0) {
+    lcd.clear();
+    lcd.print("Iteration");
+    lcd.gotoXY(0,1);
+    lcd.print(iteration);
+    turn(150, 90, 'R');
+    delay(500);
+    followLine(0);
+    delay(300);
+    alignAndCorrect();
+    delay(500);
+    turn(150, 180, 'R');
+    delay(500);
+    iteration++;
+    followLineDistance(iteration * zumoL, 2);
+    delay(500);
+    turn(150, 90, 'L');
+    delay(500);
+    moveStraightForwardUntilLine(100);
+    delay(500);
+    alignAndCorrect();
+    delay(500);
+
+  } else {
+    lcd.clear();
+    lcd.print("Iteration");
+    lcd.gotoXY(0,1);
+    lcd.print(iteration);
+    turn(150, 90, 'L');
+    delay(500);
+    followLine(2);
+    delay(500);
+    alignAndCorrect();
+    lcd.clear();
+    lcd.print("align");
+    delay(500);
+    turn(150, 180, 'L');
+    delay(500);
+    iteration++;
+    followLineDistance(iteration * zumoL, 0);
+    delay(500);
+    turn(150, 90, 'R');
+    delay(500);
+    moveStraightForwardUntilLine(100);
+    delay(500);
+    alignAndCorrect();
+
+  }
 }
