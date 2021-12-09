@@ -167,8 +167,19 @@ void loop() { //----------------------------------------------------------------
     lcd.clear();
     lcd.print("3/3 wads");
     buttonA.waitForPress();
-    returnHome();
-    // drive back
+    if (iteration % 2 == 1) {
+      turn(150, 90, 'r');
+      followLine(0);
+    } else {
+      turn(150, 90, 'l');
+      followLine(2);
+      turn(150, 90, 'l');
+      followLine(2);
+    }
+    lcd.clear();
+    lcd.print("Unload");
+    delay(5000);
+    buttonA.waitForPress();
   }
 }
 
@@ -686,6 +697,12 @@ void turn(int speed, int grader, char direction) {
       motors.setSpeeds(speed, -speed);
       turnSensorUpdate();
     }
+    if (theta >= 360) {
+      theta = theta - 360;
+    }
+    if (theta < 0) {
+      theta = 360 - theta;
+    }
     motors.setSpeeds(0, 0);
     encoders.getCountsAndResetLeft();
     encoders.getCountsAndResetRight();
@@ -721,7 +738,12 @@ void returnHome() {
 
   delay(500);
 
-  turn(150, 180 - theta + angleSumV, 'l');
+  lcd.clear();
+  lcd.print(theta);
+  lcd.gotoXY(0, 1);
+  lcd.print(angleSumV);
+  buttonA.waitForPress();
+  turn(150, abs(180 - theta + angleSumV), 'l');
   BLA::Matrix<2, 2> rotation = {cos(radTheta), sin(radTheta), -sin(radTheta), cos(radTheta)};
   BLA::Matrix<2> homeDistance = rotation * sumV;
   lcd.clear();
@@ -743,49 +765,43 @@ void proxRead() {
   int proximityLeft = proxSensors.countsFrontWithLeftLeds();
   int proximityRight = proxSensors.countsFrontWithRightLeds();
   Serial.println("proxLeft: " + String(proximityLeft) + " // " + "proxRight: " + String(proximityRight));
-  if (proximityRight >= 7 || proximityLeft >= 7) { //If something triggers this number, there is either an obstacle or wad in front of the robot
+  if (proximityRight >= 9 || proximityLeft >= 9) { //If something triggers this number, there is either an obstacle or wad in front of the robot
     stopMotors();
-    ledRed(true);
-    delay(1000);
-    ledRed(false);
     delay(100);
     moveStraightDistance(100, 8); //move forward to check the number again,
-    ledRed(true);
-    delay(1000);
-    ledRed(false);
     delay(100);
     proxSensors.read();
     proximityLeft = proxSensors.countsFrontWithLeftLeds();
     proximityRight = proxSensors.countsFrontWithRightLeds();
-    if (proximityRight <= 6 || proximityLeft <= 6) {
+    if (proximityRight <= 8 || proximityLeft <= 8) {
       if (proximityLeft < proximityRight) {
-        turn(150, 20, 'r');
+        turn(150, 35, 'r');
         proxSensors.read();
         proximityLeft = proxSensors.countsFrontWithLeftLeds();
         proximityRight = proxSensors.countsFrontWithRightLeds();
-        if (proximityRight > 7) {
+        if (proximityRight > 8) {
           proxStatus = 1; //Define the status of the proximity readings as detecting an obstacle
           obstacleRL = 1;
         } else {
           proxStatus = 2; //Define the status of the proximity readings as detecting a wad.
-        } 
+        }
 
-        turn(150, 20, 'l');
+        turn(150, 35, 'l');
         turnSensorReset();
       } else if (proximityLeft > proximityRight) {
-        turn(150, 20, 'l');
+        turn(150, 35, 'l');
         proxSensors.read();
         proximityLeft = proxSensors.countsFrontWithLeftLeds();
         proximityRight = proxSensors.countsFrontWithRightLeds();
-        if (proximityLeft > 7) {
+        if (proximityLeft > 8) {
           proxStatus = 1; //Define the status of the proximity readings as detecting an obstacle
           obstacleRL = 0;
         } else {
           proxStatus = 2; //Define the status of the proximity readings as detecting a wad.
         }
-        turn(150, 20, 'r');
+        turn(150, 35, 'r');
         turnSensorReset();
-      } else if(proximityLeft == proximityRight){
+      } else if (proximityLeft == proximityRight) {
         proxStatus = 2;
       }
     }
@@ -797,7 +813,7 @@ void proxRead() {
   //Actions that follow now are all after identification
 
   if (proxStatus == 1 && iteration % 2 == 0) {
-    while (proximityRight < 9 && proximityLeft < 9) {
+    while (proximityRight < 10 && proximityLeft < 10) {
       proxSensors.read();
       proximityLeft = proxSensors.countsFrontWithLeftLeds();
       proximityRight = proxSensors.countsFrontWithRightLeds();
@@ -806,7 +822,7 @@ void proxRead() {
     stopMotors();
     avoidObstacleLeft();
   } else if (proxStatus == 1 && iteration % 2 == 1) {
-    while (proximityRight < 9 && proximityLeft < 9) {
+    while (proximityRight < 10 && proximityLeft < 10) {
       proxSensors.read();
       proximityLeft = proxSensors.countsFrontWithLeftLeds();
       proximityRight = proxSensors.countsFrontWithRightLeds();
@@ -835,6 +851,9 @@ void wadPickUp() {
   }
   wadsCollected += 1;
   if (wadsCollected >= 3) {
+    buttonA.waitForPress();
+    returnHome();
+    // back
     stage = 2; //-----------------------------------------------------------------------------------
   }
 }
@@ -851,8 +870,8 @@ void avoidObstacleLeft() {
   resetTotalCounts();
 
   //Function in case the robot is too far on the corner, and needs to reverse back to the corner to have a neutral starting point
-  if (proximityRight <= 3 && obstacleRL == 0) {
-    while (proximityRight <= 3) {
+  if (proximityRight <= 2 && obstacleRL == 0) {
+    while (proximityRight <= 2) {
       proxSensors.read();
       proximityRight = proxSensors.countsLeftWithLeftLeds();
       moveForward(-100, -100);
@@ -934,8 +953,8 @@ void avoidObstacleRight() {
   resetTotalCounts();
 
   //Function in case the robot is too far on the corner, and needs to reverse back to the corner to have a neutral starting point
-  if (proximityRight <= 3 && obstacleRL == 1) {
-    while (proximityRight <= 3) {
+  if (proximityRight <= 2 && obstacleRL == 1) {
+    while (proximityRight <= 2) {
       proxSensors.read();
       proximityRight = proxSensors.countsRightWithRightLeds();
       moveForward(-100, -100);
