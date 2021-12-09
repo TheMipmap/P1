@@ -820,7 +820,7 @@ void proxRead() {
       moveForward(100, 100);
     }
     stopMotors();
-    avoidObstacleLeft();
+    avoidObstacleRight();
   } else if (proxStatus == 1 && iteration % 2 == 1) {
     while (proximityRight < 10 && proximityLeft < 10) {
       proxSensors.read();
@@ -829,7 +829,7 @@ void proxRead() {
       moveForward(100, 100);
     }
     stopMotors();
-    avoidObstacleRight();
+    avoidObstacleLeft();
   }
   if (proxStatus == 2) {
     lcd.clear();
@@ -859,7 +859,7 @@ void wadPickUp() {
 }
 
 
-void avoidObstacleLeft() {
+void avoidObstacleRight() {
 
   turn(150, 90, 'r');
 
@@ -941,7 +941,7 @@ void avoidObstacleLeft() {
 
 }
 
-void avoidObstacleRight() {
+void avoidObstacleLeft() {
 
 
   turn(150, 90, 'l');
@@ -1019,6 +1019,8 @@ void avoidObstacleRight() {
   moveStraightDistance(100, totalDistance);
   turn(150, 90, 'l');
   turnSensorReset();
+
+
 }
 
 
