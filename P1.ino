@@ -31,7 +31,7 @@ bool obstacleRL = 0;
 int iteration = 0;
 
 //lenght of zumo in cm (8.6)
-double zumoL = 8.6;
+double zumoL = 38.6;
 
 //Define the number of brightnesslevels
 #define numberOfBrightnessLevels 10
@@ -116,7 +116,9 @@ BLA::Matrix<2> v;
 //Vector for zumo's global position
 BLA::Matrix<2> sumV;
 
-
+//Vector calibrating sumvector on corner 
+BLA::Matrix<2> resetIterationX;
+BLA::Matrix<2> resetIterationY;
 
 void setup() { //------------------------------------------------------------------------------------------------------------------------------------------------------------
   // Code that runs once before the loop() function
@@ -314,7 +316,7 @@ void followLineDistance(double centimeters, int sensorNumber) {
   readSensors(sensorsState);
 
   //Move straight until the center sensor is white or the distance is reached
-  while ((distance < centimeters) && !sensorsState.C) {
+  while ((distance < centimeters) {
 
     // A boolean that determines if the lineSensorValue of the outerright sensor is bigger than the threshold for that sensor
     bool lineValuesBigger = lineSensorValues[sensorNumber] > threshold[sensorNumber] ? 1 : 0;
@@ -354,6 +356,9 @@ void followLineDistance(double centimeters, int sensorNumber) {
     distance = calculateDistance(avgCounts());
     readSensors(sensorsState);
     showDistance(distance, centimeters);
+    if (!sensorsState.C && iteration %2 ==0){
+      turn(150,90,'l'
+    }
   }
   stopMotors();
   trackUpdate();
@@ -743,7 +748,9 @@ void returnHome() {
   lcd.gotoXY(0, 1);
   lcd.print(angleSumV);
   buttonA.waitForPress();
-  turn(150, abs(180 - theta + angleSumV), 'l');
+  double angleTurn = 180 - theta + angleSumV;
+  if(angleTurn >=0)turn(150,angleTurn,'l');
+  else turn(150,abs(angleTurn),'r');
   BLA::Matrix<2, 2> rotation = {cos(radTheta), sin(radTheta), -sin(radTheta), cos(radTheta)};
   BLA::Matrix<2> homeDistance = rotation * sumV;
   lcd.clear();
@@ -1040,6 +1047,7 @@ void drivePattern () {
   if (iteration == 0) {
     //Call the followLine function
     followLine(2);
+    resetIterationX = sumV;
     delay(100);
 
     //Turn left
@@ -1048,6 +1056,7 @@ void drivePattern () {
 
     //Follow outerline again
     followLine(2);
+    resetIterationY = sumV;
     delay(200);
     //
     turn(150, 90, 'l');
@@ -1078,6 +1087,7 @@ void drivePattern () {
     delay(200);
     turn(150, 180, 'R');
     delay(200);
+    sumV = resetIterationY;
     iteration++;
     followLineDistance(iteration * zumoL, 2);
     delay(200);
@@ -1102,6 +1112,7 @@ void drivePattern () {
     lcd.print("align");
     delay(200);
     turn(150, 180, 'L');
+    sumV = resetIterationX;
     delay(200);
     iteration++;
     followLineDistance(iteration * zumoL, 0);
