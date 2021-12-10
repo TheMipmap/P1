@@ -186,10 +186,6 @@ void loop() { //----------------------------------------------------------------
 }
 
 
-
-
-
-
 //
 //
 //Functions should be declared below this comment
@@ -759,8 +755,7 @@ void returnHome() {
 // calculate the distance home
   BLA::Matrix<2, 2> rotation = {cos(radTheta), sin(radTheta), -sin(radTheta), cos(radTheta)};
   BLA::Matrix<2> homeDistance = rotation * sumV;
-  lcd.clear();
-  lcd.print(homeDistance(0));
+  showDistance(homeDistance(0),homeDistance(1));
 
 //Return home
   buttonA.waitForPress();
