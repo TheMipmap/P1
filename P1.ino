@@ -116,7 +116,7 @@ BLA::Matrix<2> v;
 //Vector for zumo's global position
 BLA::Matrix<2> sumV;
 
-//Vector calibrating sumvector on corner 
+//Vector calibrating sumvector on corner
 BLA::Matrix<2> resetIterationX;
 BLA::Matrix<2> resetIterationY;
 
@@ -264,7 +264,7 @@ void followLine(int sensorNumber) {
     bool lineValuesBigger = lineSensorValues[sensorNumber] > threshold[sensorNumber] ? 1 : 0;
 
     //If the lineSensorValue of the outerright sensor is bigger than the threshold for that sensor, we will divide it by the threshold and get a number between
-    double fastMotor = 150 * (lineValuesBigger ? double(lineSensorValues[sensorNumber] / threshold[sensorNumber]) : double(threshold[sensorNumber] / lineSensorValues[sensorNumber]));
+    double fastMotor = 120 * (lineValuesBigger ? double(lineSensorValues[sensorNumber] / threshold[sensorNumber]) : double(threshold[sensorNumber] / lineSensorValues[sensorNumber]));
     double slowMotor = 60 / (lineValuesBigger ? double(lineSensorValues[sensorNumber] / threshold[sensorNumber]) : double(threshold[sensorNumber] / lineSensorValues[sensorNumber]));
 
 
@@ -351,16 +351,15 @@ void followLineDistance(double centimeters, int sensorNumber) {
     //Update distance to see if distance is reached and read sensors to check if a line is reached
     distance = calculateDistance(avgCounts());
     readSensors(sensorsState);
-    showDistance(distance, centimeters);
-    if (sensorsState.C && iteration %2 ==1){
-      turn(150,90,'l');
+    if (sensorsState.C && iteration % 2 == 1) {
+      turn(150, 90, 'l');
       followLine(2);
-      turn(150,90,'l');
+      turn(150, 90, 'l');
       buttonA.waitForPress();
       iteration = 0;
     }
-    else if (sensorsState.C && iteration %2 ==0){
-      turn(150,180,'l');
+    else if (sensorsState.C && iteration % 2 == 0) {
+      turn(150, 180, 'l');
       buttonA.waitForPress();
       iteration = 0;
     }
@@ -742,29 +741,35 @@ void returnHome() {
   double angleSumV = 57.2957795 * atan2(sumV(1), sumV(0));
   delay(500);
 
-//calculate the angle needed to turn to point at starting position
+  //calculate the angle needed to turn to point at starting position
   lcd.clear();
   lcd.print(theta);
   lcd.gotoXY(0, 1);
   lcd.print(angleSumV);
   buttonA.waitForPress();
   double angleTurn = 180 - theta + angleSumV;
-  if(angleTurn >=0)turn(150,angleTurn,'l');
-  else turn(150,abs(angleTurn),'r');
-  
-// calculate the distance home
+  if (angleTurn >= 0)turn(150, angleTurn, 'l');
+  else turn(150, abs(angleTurn), 'r');
+
+  // calculate the distance home
   BLA::Matrix<2, 2> rotation = {cos(radTheta), sin(radTheta), -sin(radTheta), cos(radTheta)};
-  BLA::Matrix<2> homeDistance = rotation * sumV;
-  showDistance(homeDistance(0),homeDistance(1));
+  double homeDistance = sqrt(pow(sumV(0), 2) + pow(sumV(1), 2));
+  showLCD(theta, homeDistance);
 
-//Return home
-  buttonA.waitForPress();
-  moveStraightDistance(100, homeDistance(0));
-  buttonA.waitForPress();
+  //Return home
+  delay(3000);
+  moveStraightDistance(100, homeDistance);
+  turn(125,180-angleSumV,'L');
+  wadsCollected = 0;
 
+  //return to where it left off
+  delay(3000);
+  turn(125,angleSumV,'l');
+  moveStraightDistance(100, homeDistance);
+  if(iteration%2 ==1) turn(125,90+angleSumV,'r');
+  else  turn(125,90-angleSumV,'l');
+  turnSensorReset();
 }
-
-
 
 //
 //
@@ -863,7 +868,7 @@ void wadPickUp() {
   }
   wadsCollected += 1;
   if (wadsCollected >= 3) {
-    buttonA.waitForPress();
+    delay(3000);
     returnHome();
     // back
     stage = 2; //-----------------------------------------------------------------------------------
@@ -1037,7 +1042,7 @@ void avoidObstacleLeft() {
 
 
 //Print the two parameters to the lcd
-void showDistance(double distance, double milimeter) {
+void showLCD(double distance, double milimeter) {
   lcd.clear();
   lcd.print(milimeter);
   lcd.gotoXY(0, 1);
@@ -1049,84 +1054,55 @@ void showDistance(double distance, double milimeter) {
 // Drive pattern for Zumo to search the field
 void drivePattern () {
 
+  //setup for the course
   if (iteration == 0) {
-    //Call the followLine function
+    //follow the first line
     followLine(2);
     resetIterationX = sumV;
     delay(100);
 
-    //Turn left
+    //follow the second line
     turn(150, 90, 'L');
     delay(100);
-
-    //Follow outerline again
     followLine(2);
     resetIterationY = sumV;
-    turnSensorReset();
-    delay(200);
-    //
+    delay(100);
     turn(150, 90, 'l');
-    delay(200);
+    delay(100);
     iteration++;
-    followLineDistance(iteration * zumoL, 2);
-    delay(200);
-    turn(150, 90, 'L');
-    delay(200);
-    moveStraightForwardUntilLine(100);
-    delay(200);
-    alignAndCorrect();
-    delay(200);
   }
 
-
-
-  if (iteration % 2 == 0) {
-    lcd.clear();
-    lcd.print("Iteration");
-    lcd.gotoXY(0, 1);
-    lcd.print(iteration);
-    turn(150, 90, 'R');
-    delay(200);
-    followLine(0);
-    delay(200);
-    alignAndCorrect();
-    delay(200);
-    turn(150, 180, 'R');
-    delay(200);
-    sumV = resetIterationY;
-    turnSensorReset();
-    iteration++;
+  if (iteration % 2 == 1) {
     followLineDistance(iteration * zumoL, 2);
-    delay(200);
-    turn(150, 90, 'L');
-    delay(200);
+    delay(100);
+    turn(125, 90, 'L');
+    delay(100);
     moveStraightForwardUntilLine(100);
-    delay(200);
-    alignAndCorrect();
-    delay(200);
-
-  } else {
-    lcd.clear();
-    lcd.print("Iteration");
-    lcd.gotoXY(0, 1);
-    lcd.print(iteration);
-    turn(150, 90, 'L');
-    delay(200);
+    delay(100);
+    turn(125, 90, 'L');
+    delay(100);
     followLine(2);
-    delay(200);
+    delay(100);
     alignAndCorrect();
-    delay(200);
-    turn(150, 180, 'L');
+    turn(125, 180, 'L');
     sumV = resetIterationX;
-    delay(200);
     iteration++;
+    } 
+    
+    else {
     followLineDistance(iteration * zumoL, 0);
-    delay(200);
-    turn(150, 90, 'R');
-    delay(200);
+    delay(100);
+    turn(125, 90, 'R');
+    delay(100);
     moveStraightForwardUntilLine(100);
-    delay(200);
+    delay(100);
+    turn(125, 90, 'R');
+    delay(100);
+    followLine(0);
+    delay(100);
     alignAndCorrect();
-
+    turn(125, 180, 'R');
+    sumV = resetIterationY;
+    iteration++;
   }
 }
