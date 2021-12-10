@@ -31,7 +31,7 @@ bool obstacleRL = 0;
 int iteration = 0;
 
 //lenght of zumo in cm (8.6)
-double zumoL = 38.6;
+double zumoL = 8.6;
 
 //Define the number of brightnesslevels
 #define numberOfBrightnessLevels 10
@@ -316,7 +316,7 @@ void followLineDistance(double centimeters, int sensorNumber) {
   readSensors(sensorsState);
 
   //Move straight until the center sensor is white or the distance is reached
-  while ((distance < centimeters) {
+  while (distance < centimeters) {
 
     // A boolean that determines if the lineSensorValue of the outerright sensor is bigger than the threshold for that sensor
     bool lineValuesBigger = lineSensorValues[sensorNumber] > threshold[sensorNumber] ? 1 : 0;
@@ -356,8 +356,17 @@ void followLineDistance(double centimeters, int sensorNumber) {
     distance = calculateDistance(avgCounts());
     readSensors(sensorsState);
     showDistance(distance, centimeters);
-    if (!sensorsState.C && iteration %2 ==0){
-      turn(150,90,'l'
+    if (sensorsState.C && iteration %2 ==1){
+      turn(150,90,'l');
+      followLine(2);
+      turn(150,90,'l');
+      buttonA.waitForPress();
+      iteration = 0;
+    }
+    else if (sensorsState.C && iteration %2 ==0){
+      turn(150,180,'l');
+      buttonA.waitForPress();
+      iteration = 0;
     }
   }
   stopMotors();
@@ -729,20 +738,15 @@ void track(double distance) {
   // add the result onto the zum vector
   sumV += rotation_inv * v;
 
-  //Serial << "rotation: " << rotation << '\n';
-  //Serial.println("x-coordinate " + String(v(0)));
-  //Serial.println("y-coordinate " + String(v(1)));
-  //Serial.println("theta " + String(v(2)));
-  //Serial << "sum " << sumV << '\n';
 }
 
 //A function that returns to the original position
 void returnHome() {
   //calculate the angle from the sumvector by tan(slope y / slope x)
   double angleSumV = 57.2957795 * atan2(sumV(1), sumV(0));
-
   delay(500);
 
+//calculate the angle needed to turn to point at starting position
   lcd.clear();
   lcd.print(theta);
   lcd.gotoXY(0, 1);
@@ -751,14 +755,20 @@ void returnHome() {
   double angleTurn = 180 - theta + angleSumV;
   if(angleTurn >=0)turn(150,angleTurn,'l');
   else turn(150,abs(angleTurn),'r');
+  
+// calculate the distance home
   BLA::Matrix<2, 2> rotation = {cos(radTheta), sin(radTheta), -sin(radTheta), cos(radTheta)};
   BLA::Matrix<2> homeDistance = rotation * sumV;
   lcd.clear();
   lcd.print(homeDistance(0));
 
-  //Return home
+//Return home
+  buttonA.waitForPress();
   moveStraightDistance(100, homeDistance(0));
+  buttonA.waitForPress();
+
 }
+
 
 
 //
@@ -1057,6 +1067,7 @@ void drivePattern () {
     //Follow outerline again
     followLine(2);
     resetIterationY = sumV;
+    turnSensorReset();
     delay(200);
     //
     turn(150, 90, 'l');
@@ -1088,6 +1099,7 @@ void drivePattern () {
     turn(150, 180, 'R');
     delay(200);
     sumV = resetIterationY;
+    turnSensorReset();
     iteration++;
     followLineDistance(iteration * zumoL, 2);
     delay(200);
@@ -1108,8 +1120,6 @@ void drivePattern () {
     followLine(2);
     delay(200);
     alignAndCorrect();
-    lcd.clear();
-    lcd.print("align");
     delay(200);
     turn(150, 180, 'L');
     sumV = resetIterationX;
