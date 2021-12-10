@@ -31,7 +31,7 @@ bool obstacleRL = 0;
 int iteration = 0;
 
 //lenght of zumo in cm (8.6)
-double zumoL = 8.6;
+double zumoL = 38.6;
 
 //Define the number of brightnesslevels
 #define numberOfBrightnessLevels 10
@@ -316,7 +316,7 @@ void followLineDistance(double centimeters, int sensorNumber) {
   readSensors(sensorsState);
 
   //Move straight until the center sensor is white or the distance is reached
-  while ((distance < centimeters)) {
+  while ((distance < centimeters) {
 
     // A boolean that determines if the lineSensorValue of the outerright sensor is bigger than the threshold for that sensor
     bool lineValuesBigger = lineSensorValues[sensorNumber] > threshold[sensorNumber] ? 1 : 0;
@@ -357,7 +357,7 @@ void followLineDistance(double centimeters, int sensorNumber) {
     readSensors(sensorsState);
     showDistance(distance, centimeters);
     if (!sensorsState.C && iteration %2 ==0){
-      turn(150,90,'l');
+      turn(150,90,'l'
     }
   }
   stopMotors();
