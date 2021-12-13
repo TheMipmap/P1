@@ -31,7 +31,7 @@ bool obstacleRL = 0;
 int iteration = 0;
 
 //lenght of zumo in cm (8.6)
-double zumoL = 48.6;
+double zumoL = 8;
 
 //Define the number of brightnesslevels
 #define numberOfBrightnessLevels 10
