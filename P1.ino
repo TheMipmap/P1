@@ -31,7 +31,7 @@ bool obstacleRL = 0;
 int iteration = 0;
 
 //lenght of zumo in cm (8.6)
-double zumoL = 8.6;
+double zumoL = 48.6;
 
 //Define the number of brightnesslevels
 #define numberOfBrightnessLevels 10
@@ -165,22 +165,9 @@ void loop() { //----------------------------------------------------------------
     drivePattern();
   }
   if (stage == 2) {
-    //if there are 3 wads onboard the zumo
+    //if the Zumo is done
     lcd.clear();
-    lcd.print("3/3 wads");
-    buttonA.waitForPress();
-    if (iteration % 2 == 1) {
-      turn(150, 90, 'r');
-      followLine(0);
-    } else {
-      turn(150, 90, 'l');
-      followLine(2);
-      turn(150, 90, 'l');
-      followLine(2);
-    }
-    lcd.clear();
-    lcd.print("Unload");
-    delay(5000);
+    lcd.print("Done!");
     buttonA.waitForPress();
   }
 }
@@ -300,8 +287,60 @@ void followLine(int sensorNumber) {
 }
 
 
+// Function that follows a line and checks for objects
+void followLineWithProx(int sensorNumber) {
+
+
+  //Read linesensors to check if middle sensor is white
+  readSensors(sensorsState);
+
+  //while center sensor is NOT white, follow the line.
+  while (!sensorsState.C) {
+
+    //Check proximity
+    proxRead();
+
+    // A boolean that determines if the lineSensorValue of the outerright sensor is bigger than the threshold for that sensor
+    bool lineValuesBigger = lineSensorValues[sensorNumber] > threshold[sensorNumber] ? 1 : 0;
+
+    //If the lineSensorValue of the outerright sensor is bigger than the threshold for that sensor, we will divide it by the threshold and get a number between
+    double fastMotor = 120 * (lineValuesBigger ? double(lineSensorValues[sensorNumber] / threshold[sensorNumber]) : double(threshold[sensorNumber] / lineSensorValues[sensorNumber]));
+    double slowMotor = 60 / (lineValuesBigger ? double(lineSensorValues[sensorNumber] / threshold[sensorNumber]) : double(threshold[sensorNumber] / lineSensorValues[sensorNumber]));
+
+
+    //If the line sensor value is above threshold turn right
+    if (lineSensorValues[sensorNumber] > threshold[sensorNumber] * 1.1) {
+
+      //If the it if uses the left sensor, the robot should turn left when this happens
+      if (sensorNumber == 0) {
+        moveForward(slowMotor, fastMotor);
+      } else {
+        //else do the normal turn right
+        moveForward(fastMotor, slowMotor);
+      }
+    } // else if line sensor value is lower, turn left
+    else if (lineSensorValues[sensorNumber] < threshold[sensorNumber] * 0.9) {
+
+      if (sensorNumber == 0) {
+        // If it uses left sensor it should turn right here
+        moveForward(fastMotor, slowMotor);
+      } else {
+        //Else do the normal left turn
+        moveForward(slowMotor, fastMotor);
+      }
+
+    } // else move straight ahead
+    else {
+      moveForward(fastMotor, fastMotor);
+    }
+    readSensors(sensorsState);
+  }
+  //Stop the motors, as we've now reached the white line
+  stopMotors();
+}
+
 //A function that follow a line until it has travelled a given distance or hit a line with the middle sensor
-void followLineDistance(double centimeters, int sensorNumber) {
+bool followLineDistance(double centimeters, int sensorNumber) {
 
   resetTotalCounts();
 
@@ -312,7 +351,7 @@ void followLineDistance(double centimeters, int sensorNumber) {
   readSensors(sensorsState);
 
   //Move straight until the center sensor is white or the distance is reached
-  while (distance < centimeters) {
+  while (distance < centimeters && !sensorsState.C) {
 
     // A boolean that determines if the lineSensorValue of the outerright sensor is bigger than the threshold for that sensor
     bool lineValuesBigger = lineSensorValues[sensorNumber] > threshold[sensorNumber] ? 1 : 0;
@@ -351,21 +390,11 @@ void followLineDistance(double centimeters, int sensorNumber) {
     //Update distance to see if distance is reached and read sensors to check if a line is reached
     distance = calculateDistance(avgCounts());
     readSensors(sensorsState);
-    if (sensorsState.C && iteration % 2 == 1) {
-      turn(150, 90, 'l');
-      followLine(2);
-      turn(150, 90, 'l');
-      buttonA.waitForPress();
-      iteration = 0;
-    }
-    else if (sensorsState.C && iteration % 2 == 0) {
-      turn(150, 180, 'l');
-      buttonA.waitForPress();
-      iteration = 0;
-    }
+
   }
   stopMotors();
   trackUpdate();
+  return sensorsState.C ? 1 : 0;
 }
 
 // Function that gets the average counts from the two encoders
@@ -739,15 +768,16 @@ void track(double distance) {
 void returnHome() {
   //calculate the angle from the sumvector by tan(slope y / slope x)
   double angleSumV = 57.2957795 * atan2(sumV(1), sumV(0));
-  delay(500);
+  delay(300);
 
   //calculate the angle needed to turn to point at starting position
   lcd.clear();
   lcd.print(theta);
   lcd.gotoXY(0, 1);
   lcd.print(angleSumV);
-  buttonA.waitForPress();
+  delay(200);
   double angleTurn = 180 - theta + angleSumV;
+  delay(200);
   if (angleTurn >= 0)turn(150, angleTurn, 'l');
   else turn(150, abs(angleTurn), 'r');
 
@@ -759,15 +789,17 @@ void returnHome() {
   //Return home
   delay(3000);
   moveStraightDistance(100, homeDistance);
-  turn(125,180-angleSumV,'L');
+  turn(125, 180 - angleSumV, 'L');
+  lcd.clear();
+  lcd.print("Unload");
   wadsCollected = 0;
 
   //return to where it left off
   delay(3000);
-  turn(125,angleSumV,'l');
+  turn(125, angleSumV, 'l');
   moveStraightDistance(100, homeDistance);
-  if(iteration%2 ==1) turn(125,90+angleSumV,'r');
-  else  turn(125,90-angleSumV,'l');
+  if (iteration % 2 == 1) turn(125, 90 + angleSumV, 'r');
+  else  turn(125, 90 - angleSumV, 'l');
   turnSensorReset();
 }
 
@@ -870,8 +902,6 @@ void wadPickUp() {
   if (wadsCollected >= 3) {
     delay(3000);
     returnHome();
-    // back
-    stage = 2; //-----------------------------------------------------------------------------------
   }
 }
 
@@ -1054,6 +1084,9 @@ void showLCD(double distance, double milimeter) {
 // Drive pattern for Zumo to search the field
 void drivePattern () {
 
+  //Boolean for when the line is hit
+  bool hitLine;
+
   //setup for the course
   if (iteration == 0) {
     //follow the first line
@@ -1073,36 +1106,57 @@ void drivePattern () {
   }
 
   if (iteration % 2 == 1) {
-    followLineDistance(iteration * zumoL, 2);
-    delay(100);
-    turn(125, 90, 'L');
-    delay(100);
-    moveStraightForwardUntilLine(100);
-    delay(100);
-    turn(125, 90, 'L');
-    delay(100);
-    followLine(2);
-    delay(100);
-    alignAndCorrect();
-    turn(125, 180, 'L');
-    sumV = resetIterationX;
-    iteration++;
-    } 
-    
-    else {
-    followLineDistance(iteration * zumoL, 0);
-    delay(100);
-    turn(125, 90, 'R');
-    delay(100);
-    moveStraightForwardUntilLine(100);
-    delay(100);
-    turn(125, 90, 'R');
-    delay(100);
-    followLine(0);
-    delay(100);
-    alignAndCorrect();
-    turn(125, 180, 'R');
-    sumV = resetIterationY;
-    iteration++;
+    hitLine = followLineDistance(iteration * zumoL, 2);
+    if (hitLine) {
+      delay(100);
+      turn(125, 90, 'L');
+      delay(100);
+      followLineWithProx(2);
+      delay(100);
+      turn(125, 90, 'L');
+      stage = 2;
+    } else {
+      delay(100);
+      turn(125, 90, 'L');
+      delay(100);
+      moveStraightForwardUntilLine(100);
+      delay(100);
+      turn(125, 90, 'L');
+      delay(100);
+      followLine(2);
+      delay(100);
+      alignAndCorrect();
+      turn(125, 180, 'L');
+      sumV = resetIterationX;
+      iteration++;
+    }
+  }
+
+  else {
+    hitLine = followLineDistance(iteration * zumoL, 0);
+    if (hitLine) {
+      delay(100);
+      turn(125, 90, 'R');
+      followLineWithProx(0);
+      delay(100);
+      turn(125, 180, 'R');
+      followLine(2);
+      turn(125, 90, 'L');
+      stage = 2;
+    } else {
+      delay(100);
+      turn(125, 90, 'R');
+      delay(100);
+      moveStraightForwardUntilLine(100);
+      delay(100);
+      turn(125, 90, 'R');
+      delay(100);
+      followLine(0);
+      delay(100);
+      alignAndCorrect();
+      turn(125, 180, 'R');
+      sumV = resetIterationY;
+      iteration++;
+    }
   }
 }
