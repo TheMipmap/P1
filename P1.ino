@@ -735,15 +735,15 @@ void turn(int speed, int grader, char direction) {
       motors.setSpeeds(speed, -speed);
       turnSensorUpdate();
     }
-    if (theta >= 360) {
-      theta = theta - 360;
-    }
-    if (theta < 0) {
-      theta = 360 - theta;
-    }
     motors.setSpeeds(0, 0);
     encoders.getCountsAndResetLeft();
     encoders.getCountsAndResetRight();
+  }
+  if (theta >= 360) {
+      theta = theta - 360;
+  }
+  if (theta < 0) {
+      theta = 360 - theta;
   }
 }
 
