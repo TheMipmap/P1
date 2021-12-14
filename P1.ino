@@ -926,7 +926,7 @@ void avoidObstacleRight() {
   delay(1000);
   moveStraightDistance(100, 15);
   delay(1000);
-  double totalDistance = calculateDistance(totalCountsL);
+  double totalDistance = calculateDistance(avgCounts());
   lcd.clear();
   lcd.print("Cm: " + String(totalDistance));
   delay(500);
@@ -1009,7 +1009,7 @@ void avoidObstacleLeft() {
   delay(1000);
   moveStraightDistance(100, 15);
   delay(1000);
-  double totalDistance = calculateDistance(totalCountsL);
+  double totalDistance = calculateDistance(avgCounts());
   lcd.clear();
   lcd.print("Cm: " + String(totalDistance));
   delay(500);
