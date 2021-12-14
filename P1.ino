@@ -862,21 +862,9 @@ void proxRead() {
   //Actions that follow now are all after identification
 
   if (proxStatus == 1 && iteration % 2 == 0) {
-    while (proximityRight < 10 && proximityLeft < 10) {
-      proxSensors.read();
-      proximityLeft = proxSensors.countsFrontWithLeftLeds();
-      proximityRight = proxSensors.countsFrontWithRightLeds();
-      moveForward(100, 100);
-    }
     stopMotors();
     avoidObstacleRight();
   } else if (proxStatus == 1 && iteration % 2 == 1) {
-    while (proximityRight < 10 && proximityLeft < 10) {
-      proxSensors.read();
-      proximityLeft = proxSensors.countsFrontWithLeftLeds();
-      proximityRight = proxSensors.countsFrontWithRightLeds();
-      moveForward(100, 100);
-    }
     stopMotors();
     avoidObstacleLeft();
   }
