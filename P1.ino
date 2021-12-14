@@ -743,7 +743,7 @@ void turn(int speed, int grader, char direction) {
       theta = theta - 360;
   }
   if (theta < 0) {
-      theta = 360 - theta;
+      theta = 360 + theta;
   }
 }
 
