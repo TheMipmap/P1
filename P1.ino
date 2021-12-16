@@ -485,8 +485,8 @@ void moveStraightForwardUntilLine(int fart) {
     readSensors(sensorsState);
     turnSensorUpdate();
     angle = (((uint32_t)turnAngle >> 16) * 360) >> 16;
-    lcd.clear();
-    lcd.print(angle);
+    //lcd.clear();
+    //lcd.print(angle);
 
   }
   stopMotors();
@@ -516,10 +516,10 @@ void moveStraightDistance(int fart, double centimeters) {
   while (distance < centimeters) {
 
     //print LCD
-    lcd.clear();
+    /*lcd.clear();
     lcd.print(distance);
     lcd.gotoXY(0, 1);
-    lcd.print(centimeters);
+    lcd.print(centimeters);*/
 
 
     //If gyro sensors angle is 0 degrees, run the same speed on both motors
@@ -576,8 +576,8 @@ void alignAndCorrect() {
       break;
 
     default:
-      lcd.clear();
-      lcd.print("Straight");
+      //lcd.clear();
+      //lcd.print("Straight");
       stopMotors();
   }
 }
@@ -771,10 +771,11 @@ void returnHome() {
   delay(300);
 
   //calculate the angle needed to turn to point at starting position
+  /*
   lcd.clear();
   lcd.print(theta);
   lcd.gotoXY(0, 1);
-  lcd.print(angleSumV);
+  lcd.print(angleSumV);*/
   delay(200);
   double angleTurn = 180 - theta + angleSumV;
   delay(200);
@@ -787,15 +788,18 @@ void returnHome() {
   showLCD(theta, homeDistance);
 
   //Return home
-  delay(3000);
+  delay(500);
   moveStraightDistance(100, homeDistance);
   turn(125, 180 - angleSumV, 'L');
   lcd.clear();
   lcd.print("Unload");
+  lcd.gotoXY(0,1);
+  lcd.print("Press A");
   wadsCollected = 0;
+  buttonA.waitForPress();
 
   //return to where it left off
-  delay(3000);
+  delay(300);
   turn(125, angleSumV, 'l');
   moveStraightDistance(100, homeDistance);
   if (iteration % 2 == 1) turn(125, 90 + angleSumV, 'r');
@@ -887,6 +891,10 @@ void wadPickUp() {
     delay(500);
   }
   wadsCollected += 1;
+  lcd.clear();
+  lcd.print("Wads:");
+  lcd.gotoXY(2,1);
+  lcd.print(String(wadsCollected) + "/" + "3" );
   if (wadsCollected >= 3) {
     delay(3000);
     returnHome();
@@ -927,17 +935,17 @@ void avoidObstacleRight() {
   moveStraightDistance(100, 15);
   delay(1000);
   double totalDistance = calculateDistance(avgCounts());
-  lcd.clear();
-  lcd.print("Cm: " + String(totalDistance));
+  //lcd.clear();
+  //lcd.print("Cm: " + String(totalDistance));
   delay(500);
   turn(150, 90, 'l');
   proxSensors.read();
   proximityRight = proxSensors.countsLeftWithLeftLeds();
   while (proximityRight <= 5) {
-    lcd.clear();
+    /*lcd.clear();
     lcd.print("before obs");
     lcd.gotoXY(0, 1);
-    lcd.print(proximityRight);
+    lcd.print(proximityRight);*/
     proxSensors.read();
     proximityRight = proxSensors.countsLeftWithLeftLeds();
     moveForward(100, 100);
@@ -954,10 +962,10 @@ void avoidObstacleRight() {
   proxSensors.read();
   proximityRight = proxSensors.countsLeftWithLeftLeds();
   while (proximityRight >= 5) {
-    lcd.clear();
+    /*lcd.clear();
     lcd.print("beside obs");
     lcd.gotoXY(0, 1);
-    lcd.print(proximityRight);
+    lcd.print(proximityRight);*/
     proxSensors.read();
     proximityRight = proxSensors.countsLeftWithLeftLeds();
     moveForward(100, 100);
@@ -1010,17 +1018,17 @@ void avoidObstacleLeft() {
   moveStraightDistance(100, 15);
   delay(1000);
   double totalDistance = calculateDistance(avgCounts());
-  lcd.clear();
-  lcd.print("Cm: " + String(totalDistance));
+  //lcd.clear();
+  //lcd.print("Cm: " + String(totalDistance));
   delay(500);
   turn(150, 90, 'r');
   proxSensors.read();
   proximityRight = proxSensors.countsRightWithRightLeds();
   while (proximityRight <= 5) {
-    lcd.clear();
+    /*lcd.clear();
     lcd.print("before obs");
     lcd.gotoXY(0, 1);
-    lcd.print(proximityRight);
+    lcd.print(proximityRight);*/
     proxSensors.read();
     proximityRight = proxSensors.countsRightWithRightLeds();
     moveForward(100, 100);
@@ -1037,10 +1045,10 @@ void avoidObstacleLeft() {
   proxSensors.read();
   proximityRight = proxSensors.countsRightWithRightLeds();
   while (proximityRight >= 5) {
-    lcd.clear();
+    /*lcd.clear();
     lcd.print("beside obs");
     lcd.gotoXY(0, 1);
-    lcd.print(proximityRight);
+    lcd.print(proximityRight);*/
     proxSensors.read();
     proximityRight = proxSensors.countsRightWithRightLeds();
     moveForward(100, 100);
@@ -1061,10 +1069,10 @@ void avoidObstacleLeft() {
 
 //Print the two parameters to the lcd
 void showLCD(double distance, double milimeter) {
-  lcd.clear();
+  /*lcd.clear();
   lcd.print(milimeter);
   lcd.gotoXY(0, 1);
-  lcd.print(distance);
+  lcd.print(distance);*/
 }
 
 
