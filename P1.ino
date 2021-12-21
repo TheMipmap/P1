@@ -157,18 +157,23 @@ void setup() { //---------------------------------------------------------------
   resetTotalCounts();
 }
 
+//Initiate the stage variable used in the loop function.
 int stage = 1;
 
 void loop() { //---------------------------------------------------------------------------------------------------------------------------------------------------
   //Code that loops over and over again until the robot stops.
   if (stage == 1) {
+    //This function incorperates the entire program. So it drives in the correct pattern, in a way that covers the area. It also avoids obstacle upon detection.
     drivePattern();
   }
   if (stage == 2) {
     //if the Zumo is done
     lcd.clear();
     lcd.print("Done!");
+
+    //Run the program again if button A is pressed.
     buttonA.waitForPress();
+    stage = 1;
   }
 }
 
@@ -280,6 +285,7 @@ void followLine(int sensorNumber) {
     else {
       moveForward(fastMotor, fastMotor);
     }
+    //Read the sensors to get new data.
     readSensors(sensorsState);
   }
   //Stop the motors, as we've now reached the white line
@@ -333,6 +339,7 @@ void followLineWithProx(int sensorNumber) {
     else {
       moveForward(fastMotor, fastMotor);
     }
+    //Read the sensors to get new data.
     readSensors(sensorsState);
   }
   //Stop the motors, as we've now reached the white line
@@ -342,6 +349,7 @@ void followLineWithProx(int sensorNumber) {
 //A function that follow a line until it has travelled a given distance or hit a line with the middle sensor
 bool followLineDistance(double centimeters, int sensorNumber) {
 
+  //Reset the total count variables
   resetTotalCounts();
 
   //Variable for the distance
@@ -516,10 +524,10 @@ void moveStraightDistance(int fart, double centimeters) {
   while (distance < centimeters) {
 
     //print LCD
-    lcd.clear();
+    /*lcd.clear();
     lcd.print(distance);
     lcd.gotoXY(0, 1);
-    lcd.print(centimeters);
+    lcd.print(centimeters);*/
 
 
     //If gyro sensors angle is 0 degrees, run the same speed on both motors
@@ -552,14 +560,16 @@ void alignAndCorrect() {
   readSensors(sensorsState);
   int sensorIsWhite;
 
+  //Update the variable depending on which sensor is white.
   if (sensorsState.L) sensorIsWhite = 0;
   if (sensorsState.C) sensorIsWhite = 2;
   if (sensorsState.R) sensorIsWhite = 1;
 
-
+  //This variable is then used as a parameter for a switch statement
   switch (sensorIsWhite) {
 
     case 0:
+      //If the right sensor is not white, drive the right track forward until it is.
       while (!sensorsState.R) {
         readSensors(sensorsState);
         moveForward(-70, 100);
@@ -568,6 +578,7 @@ void alignAndCorrect() {
       break;
 
     case 1:
+      //Same as with the previous case, but with the left motor.
       while (!sensorsState.L) {
         readSensors(sensorsState);
         moveForward(100, -70);
@@ -576,8 +587,9 @@ void alignAndCorrect() {
       break;
 
     default:
+      /*
       lcd.clear();
-      lcd.print("Straight");
+      lcd.print("Straight");*/
       stopMotors();
   }
 }
@@ -695,7 +707,7 @@ double getCountsR() {
 void trackUpdate() {
   double countsL = getCountsL(); // Henter den resettede encoder-data (Skulle gerne være 0)
   double countsR = getCountsR();
-  double avg = (countsL + countsR) / 2; //Divider med 2 :| <----------------------------------------------------------------------------------------------
+  double avg = (countsL + countsR) / 2;
   double movement = calculateDistance(avg);
   track(movement);
 }
@@ -718,19 +730,37 @@ void turn(int speed, int grader, char direction) {
   stopMotors();
   delay(150);
 
+  //If statement depending on which direction it should turn.
   if (direction == 'l' || direction == 'L') {
+
+    //Reset the turn sensor.
     turnSensorReset();
+    
+    //Theta needs to be updated
     theta += grader;
-    Serial.println(((((uint32_t)turnAngle >> 16) * 360) >> 16));
+    
+    //Uncomment for debugging.
+    //Serial.println(((((uint32_t)turnAngle >> 16) * 360) >> 16));
+
+    //While the gyro has yet to reach the desired direction, keep turning.
     while (((((uint32_t)turnAngle >> 16) * 360) >> 16) != grader) {
-      Serial.println(((((uint32_t)turnAngle >> 16) * 360) >> 16));
+      
+      //Uncomment for debugging.
+      //Serial.println(((((uint32_t)turnAngle >> 16) * 360) >> 16));
+      
       motors.setSpeeds(-speed, speed);
       turnSensorUpdate();
     }
     motors.setSpeeds(0, 0);
   } else if (direction == 'r' || direction == 'R') {
+    
+    //Reset the turn sensor.
     turnSensorReset();
+
+    //Theta needs to be updated
     theta -= grader;
+    
+    //While the gyro has yet to reach the desired direction, keep turning.
     while (((((uint32_t)turnAngle >> 16) * 360) >> 16) != 360 - grader) {
       motors.setSpeeds(speed, -speed);
       turnSensorUpdate();
@@ -739,6 +769,8 @@ void turn(int speed, int grader, char direction) {
   motors.setSpeeds(0, 0);
   encoders.getCountsAndResetLeft();
   encoders.getCountsAndResetRight();
+
+  //In case theta is not between 0 and 360, make it so.
   if (theta >= 360) {
       theta = theta - 360;
   }
@@ -750,16 +782,18 @@ void turn(int speed, int grader, char direction) {
 //A function that tracks movement in the global reference frame
 void track(double distance) {
 
-  //read the orientatation and encoders
+  //Read the orientatation and encoders
   radTheta = theta * PI / 180;
   v(0) = distance;
-  //construct the rotation matrix
+  
+  //Construct the rotation matrix
   BLA::Matrix<2, 2> rotation = {cos(radTheta), sin(radTheta), -sin(radTheta), cos(radTheta)};
 
-  //calculate the inverse matrix, in order to go from the local basis to the global
+  //Calculate the inverse matrix, in order to go from the local basis to the global
   BLA::Matrix<2, 2> rotation_inv = {cos(radTheta), -sin(radTheta), sin(radTheta), cos(radTheta)};
-  //do the calculations
-  // add the result onto the zum vector
+
+  //Do the calculations
+  //Add the result onto the zum vector
   sumV += rotation_inv * v;
 
 }
