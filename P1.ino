@@ -844,18 +844,32 @@ void returnHome() {
 //
 
 void proxRead() {
+  //Start by reading the proximity sensors to update the data.
   proxSensors.read();
+
+  //This data is then collected
   int proximityLeft = proxSensors.countsFrontWithLeftLeds();
   int proximityRight = proxSensors.countsFrontWithRightLeds();
-  Serial.println("proxLeft: " + String(proximityLeft) + " // " + "proxRight: " + String(proximityRight));
-  if (proximityRight >= 9 || proximityLeft >= 9) { //If something triggers this number, there is either an obstacle or wad in front of the robot
+  
+  //Uncomment for debugging
+  //Serial.println("proxLeft: " + String(proximityLeft) + " // " + "proxRight: " + String(proximityRight));
+  
+  //If something triggers this number, there is either an obstacle or wad in front of the robot
+  if (proximityRight >= 9 || proximityLeft >= 9) { 
     stopMotors();
     delay(100);
-    moveStraightDistance(100, 8); //move forward to check the number again,
+    
+    //move forward to check the number again,
+    moveStraightDistance(100, 8); 
     delay(100);
+    
     proxSensors.read();
+    
     proximityLeft = proxSensors.countsFrontWithLeftLeds();
     proximityRight = proxSensors.countsFrontWithRightLeds();
+
+    //If the number went down after moving forward, it is most likely a wad
+    //but to be sure, we turn slightly to the side with the lowest value and check the data again.
     if (proximityRight <= 8 || proximityLeft <= 8) {
       if (proximityLeft < proximityRight) {
         turn(150, 35, 'r');
@@ -863,38 +877,54 @@ void proxRead() {
         proximityLeft = proxSensors.countsFrontWithLeftLeds();
         proximityRight = proxSensors.countsFrontWithRightLeds();
         if (proximityRight > 8) {
-          proxStatus = 1; //Define the status of the proximity readings as detecting an obstacle
+          //Define the status of the proximity readings as detecting an obstacle
+          proxStatus = 1;
           obstacleRL = 1;
+          
         } else {
-          proxStatus = 2; //Define the status of the proximity readings as detecting a wad.
+           //Define the status of the proximity readings as detecting a wad.
+          proxStatus = 2;
         }
 
+        //Turn back, the same amount of degrees from earlier.
         turn(150, 35, 'l');
         turnSensorReset();
+
+         //If the number went down after moving forward, it is most likely a wad
+         //but to be sure, we turn slightly to the side with the lowest value and check the data again.
       } else if (proximityLeft > proximityRight) {
         turn(150, 35, 'l');
         proxSensors.read();
         proximityLeft = proxSensors.countsFrontWithLeftLeds();
         proximityRight = proxSensors.countsFrontWithRightLeds();
         if (proximityLeft > 8) {
-          proxStatus = 1; //Define the status of the proximity readings as detecting an obstacle
+          //Define the status of the proximity readings as detecting an obstacle
+          proxStatus = 1; 
           obstacleRL = 0;
+          
         } else {
-          proxStatus = 2; //Define the status of the proximity readings as detecting a wad.
+          //Define the status of the proximity readings as detecting a wad.
+          proxStatus = 2;
         }
+
+        //Turn back, the same amount of degrees from earlier.
         turn(150, 35, 'r');
         turnSensorReset();
+
+        //if the values are the smaller than the initial detection after they have driven forward, its a wad.
       } else if (proximityLeft == proximityRight) {
         proxStatus = 2;
       }
     }
     else {
-      proxStatus = 1; //Define the status of the proximity readings as detecting an obstacle.
+      //Define the status of the proximity readings as detecting an obstacle.
+      proxStatus = 1; 
     }
   }
 
   //Actions that follow now are all after identification
 
+  //Now that we know which object we have detected it is essential to either avoid or pick it up, depending on which object is detected.
   if (proxStatus == 1 && iteration % 2 == 0) {
     stopMotors();
     avoidObstacleRight();
@@ -902,11 +932,14 @@ void proxRead() {
     stopMotors();
     avoidObstacleLeft();
   }
+
+  //If it is a wad, simulate picking it up.
   if (proxStatus == 2) {
     lcd.clear();
     lcd.print("Wad spotted");
     wadPickUp();
   }
+  //Reset the variable for detection for next time the function is used.
   proxStatus = 0;
 }
 
@@ -930,50 +963,60 @@ void wadPickUp() {
 
 void avoidObstacleRight() {
 
+  //turn 90 degrees right
   turn(150, 90, 'r');
 
   //--- første omdrejning omkring objekt---
 
+  //Read the sensors and save data
   proxSensors.read();
-  int proximityRight = proxSensors.countsLeftWithLeftLeds();
+  int proximityLeft = proxSensors.countsLeftWithLeftLeds();
+
+  //reset data.
   resetTotalCounts();
 
   //Function in case the robot is too far on the corner, and needs to reverse back to the corner to have a neutral starting point
-  if (proximityRight <= 2 && obstacleRL == 0) {
-    while (proximityRight <= 2) {
+  if (proximityLeft <= 2 && obstacleRL == 0) {
+    while (proximityLeft <= 2) {
       proxSensors.read();
-      proximityRight = proxSensors.countsLeftWithLeftLeds();
+      proximityLeft = proxSensors.countsLeftWithLeftLeds();
       moveForward(-100, -100);
     }
     stopMotors();
   }
 
-  while (proximityRight >= 5) {
-
+  //Move forward until the left proximity sensor doesn't see the obstacle
+  while (proximityLeft >= 5) {
+    
     moveForward(100, 100);
     proxSensors.read();
-    proximityRight = proxSensors.countsLeftWithLeftLeds();
+    proximityLeft = proxSensors.countsLeftWithLeftLeds();
 
   }
 
   stopMotors();
   delay(1000);
+  //Clear some distance to make sure, the robot is free of the obstacle.
   moveStraightDistance(100, 15);
-  delay(1000);
+  
+  //Save a variable with the distance travelled since it begun 
   double totalDistance = calculateDistance(avgCounts());
-  lcd.clear();
-  lcd.print("Cm: " + String(totalDistance));
+  /*lcd.clear();
+  lcd.print("Cm: " + String(totalDistance));*/
   delay(500);
   turn(150, 90, 'l');
+  
   proxSensors.read();
-  proximityRight = proxSensors.countsLeftWithLeftLeds();
-  while (proximityRight <= 5) {
+  proximityLeft = proxSensors.countsLeftWithLeftLeds();
+
+  //Move forward until the object is spotted again on the left sensor.
+  while (proximityLeft <= 5) {
     lcd.clear();
     lcd.print("before obs");
     lcd.gotoXY(0, 1);
-    lcd.print(proximityRight);
+    lcd.print(proximityLeft);
     proxSensors.read();
-    proximityRight = proxSensors.countsLeftWithLeftLeds();
+    proximityLeft = proxSensors.countsLeftWithLeftLeds();
     moveForward(100, 100);
 
   }
@@ -984,25 +1027,31 @@ void avoidObstacleRight() {
 
   //---anden omdrengning omkring objekt---
 
-
+  //Read the prox sensors and save the data.  
   proxSensors.read();
-  proximityRight = proxSensors.countsLeftWithLeftLeds();
-  while (proximityRight >= 5) {
-    lcd.clear();
+  proximityLeft = proxSensors.countsLeftWithLeftLeds();
+
+  //Drive forward until the obstacle can't be seen from the left proximity sensor.
+  while (proximityLeft >= 5) {
+    /*lcd.clear();
     lcd.print("beside obs");
     lcd.gotoXY(0, 1);
-    lcd.print(proximityRight);
+    lcd.print(proximityLeft);*/
     proxSensors.read();
-    proximityRight = proxSensors.countsLeftWithLeftLeds();
+    proximityLeft = proxSensors.countsLeftWithLeftLeds();
     moveForward(100, 100);
   }
   stopMotors();
 
-
+  //Drive 15 cm more forward, to ensure that it isn't gonna hit the obstacle after turning
   moveStraightDistance(100, 15);
+
+  //turn and drive forward the calculated distance, to make sure it continues from the same line it was at before the obstacle.
   delay(1000);
   turn(150, 90, 'l');
   moveStraightDistance(100, totalDistance);
+  
+  //turn right -- the zumo will continue from where it was before this function was called - which is the function that moves straight forward until it hits a white line.
   turn(150, 90, 'r');
   turnSensorReset();
 
@@ -1012,17 +1061,22 @@ void avoidObstacleRight() {
 
 void avoidObstacleLeft() {
 
-
+  //turn 90 degrees left to get around the obstacle
   turn(150, 90, 'l');
 
   //--- første omdrejning omkring objekt---
 
+  //Read the sensors and save data
   proxSensors.read();
   int proximityRight = proxSensors.countsRightWithRightLeds();
+
+  //reset the global count variables.
   resetTotalCounts();
 
   //Function in case the robot is too far on the corner, and needs to reverse back to the corner to have a neutral starting point
   if (proximityRight <= 2 && obstacleRL == 1) {
+
+    //while the prox sensors is below 2, reverse.
     while (proximityRight <= 2) {
       proxSensors.read();
       proximityRight = proxSensors.countsRightWithRightLeds();
@@ -1031,6 +1085,7 @@ void avoidObstacleLeft() {
     stopMotors();
   }
 
+  //While the robot is beside the obstacle which was previously in front of it, it should move forward.
   while (proximityRight >= 5) {
 
     moveForward(100, 100);
@@ -1038,54 +1093,67 @@ void avoidObstacleLeft() {
     proximityRight = proxSensors.countsRightWithRightLeds();
 
   }
-
   stopMotors();
   delay(1000);
+
+  //Clear some distance to make sure, the robot is free of the obstacle.
   moveStraightDistance(100, 15);
-  delay(1000);
+
+  //Save a variable with the distance travelled since it begun 
   double totalDistance = calculateDistance(avgCounts());
-  lcd.clear();
-  lcd.print("Cm: " + String(totalDistance));
+
+  //Uncomment for debugging.
+  /*lcd.clear();
+  lcd.print("Cm: " + String(totalDistance));*/
   delay(500);
   turn(150, 90, 'r');
+
+  //read the sensors.
   proxSensors.read();
   proximityRight = proxSensors.countsRightWithRightLeds();
+
+  //Move forward until the object is spotted again on the left sensor.
   while (proximityRight <= 5) {
-    lcd.clear();
+    /*lcd.clear();
     lcd.print("before obs");
     lcd.gotoXY(0, 1);
-    lcd.print(proximityRight);
+    lcd.print(proximityRight);*/
     proxSensors.read();
     proximityRight = proxSensors.countsRightWithRightLeds();
     moveForward(100, 100);
 
   }
-
   stopMotors();
 
 
 
-  //---anden omdrengning omkring objekt---
+  //---anden omdrejning omkring objekt---
 
-
+  //Read the sensors
   proxSensors.read();
   proximityRight = proxSensors.countsRightWithRightLeds();
+
+  //while the robot is beside the obstacle move forward until it is past the obstacle.
   while (proximityRight >= 5) {
-    lcd.clear();
+    /*lcd.clear();
     lcd.print("beside obs");
     lcd.gotoXY(0, 1);
-    lcd.print(proximityRight);
+    lcd.print(proximityRight);*/
     proxSensors.read();
     proximityRight = proxSensors.countsRightWithRightLeds();
     moveForward(100, 100);
   }
   stopMotors();
 
-
+  //Move forward before turning to make sure it has cleared the obstacle.
   moveStraightDistance(100, 15);
   delay(1000);
+
+  //turn right to be ready to move towards the line it was following before the obstacle.
   turn(150, 90, 'r');
   moveStraightDistance(100, totalDistance);
+  
+  //turn left -- the zumo will continue from where it was before this function was called - which is the function that moves straight forward until it hits a white line.
   turn(150, 90, 'l');
   turnSensorReset();
 
@@ -1105,6 +1173,9 @@ void showLCD(double distance, double milimeter) {
 
 // Drive pattern for Zumo to search the field
 void drivePattern () {
+
+   //This is the algorithm that makes sure the Zumo clear the area of wads.
+   //There will be a limited amount of comments in this section, as a merely calls previously explained functions.
 
   //Boolean for when the line is hit
   bool hitLine;
@@ -1128,7 +1199,10 @@ void drivePattern () {
   }
 
   if (iteration % 2 == 1) {
+    //followLine returns 'true' if the middle sensor is reached.
     hitLine = followLineDistance(iteration * zumoL, 2);
+
+    //If the white is line the robot is finished with the area. It should then return to the starting position and indicate that it is  done.
     if (hitLine) {
       delay(100);
       turn(125, 90, 'L');
@@ -1155,7 +1229,10 @@ void drivePattern () {
   }
 
   else {
+    //followLine returns 'true' if the middle sensor is reached.
     hitLine = followLineDistance(iteration * zumoL, 0);
+
+    //If the white is line the robot is finished with the area. It should then return to the starting position and indicate that it is  done.
     if (hitLine) {
       delay(100);
       turn(125, 90, 'R');
